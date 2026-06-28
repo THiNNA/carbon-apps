@@ -7,8 +7,12 @@ import { useToast } from '../../contexts/toast-context.js';
 import type { EmissionFactorDto } from '@enterprise/shared-types';
 import { ArrowLeft, Save, Loader2, Settings2, BookOpen } from 'lucide-react';
 
+const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
 const CURRENT_FISCAL_YEAR = new Date().getFullYear() + 543;
-const FISCAL_YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_FISCAL_YEAR - i + 1);
+const FISCAL_YEARS = Array.from(
+  { length: CURRENT_FISCAL_YEAR - SYSTEM_START_YEAR + 1 },
+  (_, i) => CURRENT_FISCAL_YEAR - i
+); // [current, ..., 2565]
 
 const CATEGORIES = [
   { value: 'scope1', label: 'Scope 1 — การเผาไหม้โดยตรง + การรั่วซึม' },

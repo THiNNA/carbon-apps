@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../services/api.js';
 import { useToast } from '../../contexts/toast-context.js';
@@ -8,10 +8,13 @@ import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import type { DepartmentDto, OrganizationDto } from '@enterprise/shared-types';
 import { Plus, Pencil, Trash2, Layers, Search } from 'lucide-react';
 import { formatDate } from '../../services/date.js';
+import { useAuth } from '../../contexts/auth-context.js';
 
 export const DepartmentList: React.FC = () => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { payload } = useAuth();
+  const isSuperAdmin = payload?.roles.includes('SuperAdmin') || false;
 
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
@@ -20,11 +23,23 @@ export const DepartmentList: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterOrgId, setFilterOrgId] = useState('');
 
+  useEffect(() => {
+    if (payload) {
+      setFilterOrgId(isSuperAdmin ? '' : (payload.organizationId || ''));
+    }
+  }, [payload, isSuperAdmin]);
+
   const [showForm, setShowForm] = useState(false);
   const [editingDept, setEditingDept] = useState<DepartmentDto | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DepartmentDto | null>(null);
 
   const [formData, setFormData] = useState({ code: '', name: '', description: '', organizationId: '' });
+
+  useEffect(() => {
+    if (payload && !isSuperAdmin) {
+      setFormData(prev => ({ ...prev, organizationId: payload.organizationId || '' }));
+    }
+  }, [payload, isSuperAdmin]);
 
   const { data, isLoading } = useQuery<{ items: DepartmentDto[]; meta: any }>({
     queryKey: ['departments', page, search, sortBy, sortOrder, filterOrgId],
@@ -41,8 +56,21 @@ export const DepartmentList: React.FC = () => {
     queryFn: async () => {
       const response: any = await api.get('/organizations', { params: { limit: 100 } });
       return response.data;
-    }
+    },
+    enabled: isSuperAdmin
   });
+
+  // Fetch admin's own org name for read-only display
+  const { data: adminOrgData } = useQuery<OrganizationDto>({
+    queryKey: ['orgSingle', payload?.organizationId],
+    queryFn: async () => {
+      const response: any = await api.get(`/organizations/${payload?.organizationId}`);
+      return response.data;
+    },
+    enabled: !isSuperAdmin && !!payload?.organizationId
+  });
+
+  const adminOrgName = adminOrgData?.name || '';
 
   const createMutation = useMutation({
     mutationFn: (body: any) => api.post('/departments', body),
@@ -62,7 +90,12 @@ export const DepartmentList: React.FC = () => {
     onError: (e: any) => showToast(e.message || 'เกิดข้อผิดพลาด', 'error')
   });
 
-  const openCreate = () => { setEditingDept(null); setFormData({ code: '', name: '', description: '', organizationId: filterOrgId || '' }); setShowForm(true); };
+  const openCreate = () => {
+    setEditingDept(null);
+    const defaultOrgId = isSuperAdmin ? (filterOrgId || '') : (payload?.organizationId || '');
+    setFormData({ code: '', name: '', description: '', organizationId: defaultOrgId });
+    setShowForm(true);
+  };
   const openEdit = (dept: DepartmentDto) => { setEditingDept(dept); setFormData({ code: dept.code, name: dept.name, description: dept.description || '', organizationId: dept.organizationId }); setShowForm(true); };
   const closeForm = () => { setShowForm(false); setEditingDept(null); };
 
@@ -142,11 +175,13 @@ export const DepartmentList: React.FC = () => {
             <input type="text" placeholder="ค้นหาหน่วยงาน..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
-          <select value={filterOrgId} onChange={(e) => { setFilterOrgId(e.target.value); setPage(1); }}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">ทุกองค์กร</option>
-            {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-          </select>
+          {isSuperAdmin && (
+            <select value={filterOrgId} onChange={(e) => { setFilterOrgId(e.target.value); setPage(1); }}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="">ทุกองค์กร</option>
+              {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+            </select>
+          )}
         </div>
 
         <DataTable
@@ -177,11 +212,21 @@ export const DepartmentList: React.FC = () => {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">สังกัดองค์กร *</label>
-                <select value={formData.organizationId} onChange={(e) => setFormData(p => ({ ...p, organizationId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
-                  <option value="">-- เลือกองค์กร --</option>
-                  {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                </select>
+                {isSuperAdmin ? (
+                  <select value={formData.organizationId} onChange={(e) => setFormData(p => ({ ...p, organizationId: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                    <option value="">-- เลือกองค์กร --</option>
+                    {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={adminOrgName}
+                    readOnly
+                    disabled
+                    className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed"
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

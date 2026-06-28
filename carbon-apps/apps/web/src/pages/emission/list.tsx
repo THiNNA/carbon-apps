@@ -13,8 +13,12 @@ import {
   Sparkles, Copy, Loader2, AlertCircle
 } from 'lucide-react';
 
+const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
 const CURRENT_FISCAL_YEAR = new Date().getFullYear() + 543;
-const FISCAL_YEARS = Array.from({ length: 6 }, (_, i) => CURRENT_FISCAL_YEAR - i + 1);
+const FISCAL_YEARS = Array.from(
+  { length: CURRENT_FISCAL_YEAR - SYSTEM_START_YEAR + 1 },
+  (_, i) => CURRENT_FISCAL_YEAR - i
+); // [current, ..., 2565]
 
 const CATEGORY_LABELS: Record<string, string> = {
   scope1: 'Scope 1',

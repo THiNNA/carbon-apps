@@ -41,15 +41,15 @@ export const DashboardLayout: React.FC = () => {
   };
 
   const adminItems = [
-    { label: 'จัดการผู้ใช้งาน', path: '/users', icon: <Users size={18} className="text-sky-400" />, show: hasPermission('users:read') },
-    { label: 'จัดการบทบาท', path: '/roles', icon: <Shield size={18} className="text-indigo-400" />, show: hasPermission('roles:read') },
-    { label: 'สิทธิ์การใช้งาน', path: '/permissions', icon: <Key size={18} className="text-amber-400" />, show: hasPermission('permissions:read') },
+    { label: 'จัดการบทบาท', path: '/roles', icon: <Shield size={18} className="text-indigo-400" />, show: payload?.roles.includes('SuperAdmin') },
+    { label: 'สิทธิ์การใช้งาน', path: '/permissions', icon: <Key size={18} className="text-amber-400" />, show: payload?.roles.includes('SuperAdmin') },
     { label: 'ตั้งค่าสัมประสิทธิ์คาร์บอน (EF)', path: '/settings/emission-factors', icon: <Settings2 size={18} className="text-emerald-400" />, show: payload?.roles.includes('SuperAdmin') ?? false }
   ];
 
   const orgItems = [
-    { label: 'จัดการองค์กร', path: '/organizations', icon: <Building2 size={18} className="text-blue-400" />, show: hasPermission('organizations:read') },
-    { label: 'จัดการหน่วยงาน', path: '/departments', icon: <Layers size={18} className="text-cyan-400" />, show: hasPermission('departments:read') }
+    { label: 'จัดการองค์กร', path: '/organizations', icon: <Building2 size={18} className="text-blue-400" />, show: payload?.roles.includes('SuperAdmin') },
+    { label: 'จัดการหน่วยงาน', path: '/departments', icon: <Layers size={18} className="text-cyan-400" />, show: payload?.roles.includes('SuperAdmin') || payload?.roles.includes('Admin') },
+    { label: 'จัดการผู้ใช้งาน', path: '/users', icon: <Users size={18} className="text-sky-400" />, show: payload?.roles.includes('SuperAdmin') || payload?.roles.includes('Admin') }
   ];
 
   const carbonItems = [

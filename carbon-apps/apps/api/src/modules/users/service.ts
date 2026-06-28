@@ -50,6 +50,7 @@ export class UserService {
     sortOrder?: 'asc' | 'desc';
     organizationId?: string;
     departmentId?: string;
+    excludeId?: string;
   }) {
     const { items, total } = await userRepository.list(params);
     const totalPages = Math.ceil(total / params.limit);

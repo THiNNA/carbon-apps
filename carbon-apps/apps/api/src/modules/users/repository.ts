@@ -17,7 +17,8 @@ export class UserRepository {
     sortBy = 'createdAt',
     sortOrder = 'desc',
     organizationId,
-    departmentId
+    departmentId,
+    excludeId
   }: {
     page: number;
     limit: number;
@@ -26,8 +27,12 @@ export class UserRepository {
     sortOrder?: 'asc' | 'desc';
     organizationId?: string;
     departmentId?: string;
+    excludeId?: string;
   }) {
     const where: any = {};
+    if (excludeId) {
+      where.id = { not: excludeId };
+    }
     if (departmentId) {
       where.departmentId = departmentId;
     } else if (organizationId) {

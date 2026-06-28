@@ -5,17 +5,19 @@ import api from '../../services/api.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import type { CarbonRecordDto, DepartmentDto, OrganizationDto } from '@enterprise/shared-types';
 import { Leaf, Calculator, ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { useAuth } from '../../contexts/auth-context.js';
 
 const MONTH_NAMES_TH = [
   '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from(
-  { length: Math.max(CURRENT_YEAR + 5, 2035) - 2020 + 1 },
-  (_, i) => 2020 + i
-);
+const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
+const CURRENT_THAI_YEAR = new Date().getFullYear() + 543;
+const THAI_YEAR_OPTIONS = Array.from(
+  { length: CURRENT_THAI_YEAR - SYSTEM_START_YEAR + 1 },
+  (_, i) => CURRENT_THAI_YEAR - i
+); // [current, ..., 2565]
 
 const EF = {
   s1StationaryDiesel: 2.7078, s1StationaryGasoline: 2.1894, s1CookingLpg: 3.1134,
@@ -70,7 +72,7 @@ type FormState = {
 };
 
 const DEFAULT_FORM: FormState = {
-  departmentId: '', year: CURRENT_YEAR, month: new Date().getMonth() + 1, notes: '', status: 'draft',
+  departmentId: '', year: CURRENT_THAI_YEAR, month: new Date().getMonth() + 1, notes: '', status: 'draft',
   s1StationaryDieselLiters: 0, s1StationaryGasolineLiters: 0, s1CookingLpgKg: 0,
   s1VehicleDieselLiters: 0, s1VehicleGasolineLiters: 0, s1VehicleCngKg: 0,
   s1FireExtCo2Kg: 0, s1RefrigHfc134aKg: 0, s1RefrigR22Kg: 0,
@@ -139,7 +141,9 @@ const fmt = (v: number | undefined | null) => (v ?? 0).toFixed(2);
 
 const recordToForm = (r: CarbonRecordDto): FormState => ({
   ...DEFAULT_FORM,
-  departmentId: r.departmentId, year: r.year, month: r.month, notes: r.notes || '', status: r.status,
+  departmentId: r.departmentId,
+  year: r.year + 543, // convert CE from API → BE for display
+  month: r.month, notes: r.notes || '', status: r.status,
   s1StationaryDieselLiters: r.s1StationaryDieselLiters, s1StationaryGasolineLiters: r.s1StationaryGasolineLiters, s1CookingLpgKg: r.s1CookingLpgKg,
   s1VehicleDieselLiters: r.s1VehicleDieselLiters, s1VehicleGasolineLiters: r.s1VehicleGasolineLiters, s1VehicleCngKg: r.s1VehicleCngKg,
   s1FireExtCo2Kg: r.s1FireExtCo2Kg, s1RefrigHfc134aKg: r.s1RefrigHfc134aKg, s1RefrigR22Kg: r.s1RefrigR22Kg,
@@ -196,11 +200,23 @@ export const CarbonRecordForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { payload } = useAuth();
+  const isSuperAdmin = payload?.roles.includes('SuperAdmin') || false;
+  const isAdmin = payload?.roles.includes('Admin') || false;
   const isEditMode = !!id;
   const [activeTab, setActiveTab] = useState(0);
   const [formData, setFormData] = useState<FormState>({ ...DEFAULT_FORM });
   const [formOrgId, setFormOrgId] = useState('');
   const [confirmSave, setConfirmSave] = useState(false);
+
+  useEffect(() => {
+    if (!isEditMode && payload) {
+      setFormOrgId(isSuperAdmin ? '' : (payload.organizationId || ''));
+      if (!isSuperAdmin && !isAdmin) {
+        setFormData(prev => ({ ...prev, departmentId: payload.departmentId || '' }));
+      }
+    }
+  }, [isEditMode, payload, isSuperAdmin, isAdmin]);
 
   const [alertDialog, setAlertDialog] = useState<{
     isOpen: boolean;
@@ -302,10 +318,12 @@ export const CarbonRecordForm: React.FC = () => {
 
   const handleSaveConfirm = () => {
     setConfirmSave(false);
+    // Convert BE → CE before sending to API
+    const body = { ...formData, year: formData.year - 543 };
     if (isEditMode) {
-      updateMutation.mutate({ id, body: formData });
+      updateMutation.mutate({ id, body });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(body);
     }
   };
 
@@ -378,14 +396,14 @@ export const CarbonRecordForm: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">องค์กร</label>
-                      <select value={formOrgId} onChange={e => { setFormOrgId(e.target.value); sf({ ...f, departmentId: '' }); }} className={ic} disabled={isEditMode}>
+                      <select value={formOrgId} onChange={e => { setFormOrgId(e.target.value); sf({ ...f, departmentId: '' }); }} className={ic} disabled={isEditMode || !isSuperAdmin}>
                         <option value="">-- เลือกองค์กร --</option>
                         {orgs?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">หน่วยงาน <span className="text-rose-500">*</span></label>
-                      <select required value={f.departmentId} onChange={e => sf({ ...f, departmentId: e.target.value })} className={ic} disabled={isEditMode}>
+                      <select required value={f.departmentId} onChange={e => sf({ ...f, departmentId: e.target.value })} className={ic} disabled={isEditMode || (!isSuperAdmin && !isAdmin)}>
                         <option value="">-- เลือกหน่วยงาน --</option>
                         {formDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                       </select>
@@ -393,9 +411,9 @@ export const CarbonRecordForm: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1">ปี (ค.ศ.) <span className="text-rose-500">*</span></label>
-                      <select required value={f.year} onChange={e => sf({ ...f, year: parseInt(e.target.value, 10) || CURRENT_YEAR })} disabled={isEditMode} className={`${ic} disabled:bg-slate-50`}>
-                        {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+                      <label className="block text-xs font-semibold text-slate-500 mb-1">ปี (พ.ศ.) <span className="text-rose-500">*</span></label>
+                      <select required value={f.year} onChange={e => sf({ ...f, year: parseInt(e.target.value, 10) || CURRENT_THAI_YEAR })} disabled={isEditMode} className={`${ic} disabled:bg-slate-50`}>
+                        {THAI_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
                     </div>
                     <div>
