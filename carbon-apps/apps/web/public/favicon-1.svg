@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Premium Emerald to Deep Teal Gradient for Background -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Outer container: Rounded square with soft corners -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  
+  <!-- Footprint group (in white for contrast) -->
+  <g transform="translate(110, 95) scale(0.65)" fill="#ffffff">
+    <!-- Big Sole Leaf -->
+    <path d="M 200, 120 
+             C 270, 160 300, 260 270, 350 
+             C 240, 420 180, 470 150, 480 
+             C 120, 470 60, 420 30, 350 
+             C 0, 260 30, 160 100, 120 
+             C 140, 100 170, 100 200, 120 Z" />
+             
+    <!-- Heel (Small Leaf / Drop shape) -->
+    <path d="M 150, 500 
+             C 180, 500 200, 520 200, 550 
+             C 200, 580 170, 600 150, 600 
+             C 130, 600 100, 580 100, 550 
+             C 100, 520 120, 500 150, 500 Z" />
+             
+    <!-- Leaf Vein Cutouts (drawn in background gradient color for a transparent look) -->
+    <!-- Main stem -->
+    <path d="M 150, 450 Q 155, 300 150, 140" stroke="url(#bgGrad)" stroke-width="12" stroke-linecap="round" fill="none" />
+    <!-- Secondary vein branches -->
+    <path d="M 152, 390 Q 110, 330 80, 320" stroke="url(#bgGrad)" stroke-width="8" stroke-linecap="round" fill="none" />
+    <path d="M 152, 340 Q 200, 280 220, 270" stroke="url(#bgGrad)" stroke-width="8" stroke-linecap="round" fill="none" />
+    <path d="M 152, 270 Q 100, 220 90, 210" stroke="url(#bgGrad)" stroke-width="8" stroke-linecap="round" fill="none" />
+    <path d="M 152, 220 Q 190, 170 210, 160" stroke="url(#bgGrad)" stroke-width="8" stroke-linecap="round" fill="none" />
+             
+    <!-- Toes (Leaves) -->
+    <!-- Toe 1 (Big Toe - Left side) -->
+    <path d="M 80, 50 
+             C 95, 55 105, 75 95, 95 
+             C 85, 115 65, 115 50, 95 
+             C 35, 75 45, 55 60, 50 
+             C 68, 48 74, 48 80, 50 Z" />
+             
+    <!-- Toe 2 -->
+    <path d="M 130, 40 
+             C 142, 44 150, 60 142, 76 
+             C 134, 92 118, 92 106, 76 
+             C 94, 60 102, 44 114, 40 
+             C 120, 38 125, 38 130, 40 Z" />
+             
+    <!-- Toe 3 -->
+    <path d="M 180, 42 
+             C 190, 46 196, 60 190, 74 
+             C 184, 88 170, 88 160, 74 
+             C 150, 60 156, 46 166, 42 
+             C 171, 40 176, 40 180, 42 Z" />
+             
+    <!-- Toe 4 -->
+    <path d="M 225, 55 
+             C 233, 59 237, 71 233, 83 
+             C 229, 95 217, 95 209, 83 
+             C 201, 71 205, 59 213, 55 
+             C 217, 53 221, 53 225, 55 Z" />
+             
+    <!-- Toe 5 (Pinky Toe) -->
+    <path d="M 265, 80 
+             C 271, 84 273, 94 269, 104 
+             C 265, 114 255, 114 249, 104 
+             C 243, 94 245, 84 251, 80 
+             C 256, 78 261, 78 265, 80 Z" />
+  </g>
+</svg>

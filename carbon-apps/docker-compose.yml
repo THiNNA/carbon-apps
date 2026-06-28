@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_123
+      MYSQL_DATABASE: carbon_footprint_db
+      MYSQL_USER: db_admin
+      MYSQL_PASSWORD: admin@carbon@123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: api_service
+    restart: always
+    environment:
+      DATABASE_URL: mysql://db_admin:admin%40carbon%40123@db:3306/carbon_footprint_db
+      PORT: 3000
+      JWT_SECRET: super_secret_jwt_access_key_2026_carbon
+      JWT_REFRESH_SECRET: super_secret_jwt_refresh_key_2026_carbon
+      ACCESS_TOKEN_EXPIRY: 15m
+      REFRESH_TOKEN_EXPIRY: 7d
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ./apps/api/src
+          action: rebuild
+        - path: ./prisma
+          action: rebuild
+        - path: ./packages
+          action: rebuild
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: web_client
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    develop:
+      watch:
+        - path: ./apps/web/src
+          action: rebuild
+        - path: ./apps/web/index.html
+          action: rebuild
+        - path: ./packages
+          action: rebuild
+
+volumes:
+  mysql_data:

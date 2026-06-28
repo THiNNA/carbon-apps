@@ -1,0 +1,336 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  name        String
+  description String?
+  address     String?
+  phone       String?
+  departments Department[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+  deletedBy   String?
+
+  @@map("organizations")
+}
+
+model Department {
+  id             String       @id @default(uuid())
+  code           String
+  name           String
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  users          User[]
+  carbonRecords  CarbonRecord[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
+  deletedBy      String?
+
+  @@unique([code, organizationId])
+  @@map("departments")
+}
+
+model CarbonRecord {
+  id           String     @id @default(uuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  year         Int
+  month        Int
+
+  // ===================== SCOPE 1 =====================
+  // Stationary Combustion (การเผาไหม้เชื้อเพลิงนิ่ง)
+  s1StationaryDieselLiters   Float @default(0) // ดีเซล (ลิตร) EF=2.7078
+  s1StationaryGasolineLiters Float @default(0) // เบนซิน (ลิตร) EF=2.1894
+  s1CookingLpgKg             Float @default(0) // LPG หุงต้ม (กก.) EF=3.1134
+
+  // Mobile Combustion (การเผาไหม้เชื้อเพลิงเคลื่อนที่)
+  s1VehicleDieselLiters   Float @default(0) // รถดีเซล (ลิตร) EF=2.7406
+  s1VehicleGasolineLiters Float @default(0) // รถเบนซิน (ลิตร) EF=2.2394
+  s1VehicleCngKg          Float @default(0) // รถ CNG (กก.) EF=2.2609
+
+  // Fugitive Emissions (การรั่วไหล)
+  s1FireExtCo2Kg          Float @default(0) // CO2 ถังดับเพลิง (กก.) EF=1.0
+  s1RefrigHfc134aKg       Float @default(0) // สารทำความเย็น HFC-134a (กก.) EF=1300
+  s1RefrigR22Kg           Float @default(0) // สารทำความเย็น R-22 (กก.) EF=1760
+  s1AnesthesiaN2oMl       Float @default(0) // ยาสลบ N2O (มล.) EF=265 kgCO2e/kg
+  s1AnesthesiaIsoflurMl   Float @default(0) // ยาสลบ Isoflurane (มล.) EF=539 kgCO2e/kg
+  s1AnesthesiaDesfluMl    Float @default(0) // ยาสลบ Desflurane (มล.) EF=2540 kgCO2e/kg
+  s1AnesthesiaSevoflurMl  Float @default(0) // ยาสลบ Sevoflurane (มล.) EF=144 kgCO2e/kg
+
+  // On-site Waste Treatment (ขยะบำบัดภายใน)
+  s1InfWasteAutoclaveKg   Float @default(0) // มูลฝอยติดเชื้อ Autoclave (กก.) EF=0.243
+  s1OrganicWasteFermentKg Float @default(0) // ขยะอินทรีย์ หมัก/บ่อไบโอเฟอร์เมนต์ (กก.) EF=0.3338
+  s1OrganicWasteCompostKg Float @default(0) // ขยะอินทรีย์ Compost (กก.) EF=0.1102
+
+  // Wastewater Treatment (การบำบัดน้ำเสีย)
+  s1WastewaterWaterM3             Float @default(0) // ปริมาณน้ำเสียเข้าระบบ (m3)
+  s1WastewaterCodAnaerobicShallow Float @default(0) // ค่า COD บ่อไม่เติมอากาศ บ่อตื้น (mg/L)
+  s1WastewaterCodAnaerobicDeep    Float @default(0) // ค่า COD บ่อไม่เติมอากาศ บ่อลึก (mg/L)
+  s1WastewaterCodAerobic          Float @default(0) // ค่า COD บ่อเติมอากาศ (mg/L)
+
+  // ===================== SCOPE 2 =====================
+  s2ElectricityKwh Float @default(0) // ไฟฟ้า (kWh) EF=0.5781
+
+  // ===================== SCOPE 3 =====================
+  // Resources & Utilities (ทรัพยากร สาธารณูปโภค)
+  s3WaterCubicM        Float @default(0) // น้ำประปา (m3) EF=0.5411
+  s3DetergentPowderKg  Float @default(0) // ผงซักฟอก (กก.)
+  s3LaundryLiquidMl    Float @default(0) // น้ำยาซักผ้า (มล.)
+  s3TonerCartridges    Float @default(0) // หมึกพิมพ์เลเซอร์ (ตลับ)
+  s3PaperA4Reams       Float @default(0) // กระดาษ A4 (รีม) EF=5.254
+  s3PlasticBagKg       Float @default(0) // ถุงขยะพลาสติก (กก.) EF=6.707
+
+  // Medical Supplies - Gloves (ถุงมือทางการแพทย์ แยกชนิด)
+  s3GlovesLatexDlcsfogPcs    Float @default(0) // Latex DLCSFOG (ชิ้น)
+  s3GlovesLatexDrofsogPcs    Float @default(0) // Latex DROFSOG (ชิ้น)
+  s3GlovesNitrileEafPcs      Float @default(0) // Nitrile DNOFEAF (ชิ้น)
+  s3GlovesNitrileDvbPcs      Float @default(0) // Nitrile DNOFEOG DVB (ชิ้น)
+  s3GlovesLatexDfofsogPcs    Float @default(0) // Latex DFOFSOG (ชิ้น)
+  s3GlovesLatexDlxfbogPcs    Float @default(0) // Latex DLXFBOG (ชิ้น)
+  s3GlovesNitrileVbuPcs      Float @default(0) // Nitrile DNOFEOG VBU (ชิ้น)
+  s3MasksBoxes               Float @default(0) // หน้ากากทางการแพทย์ (กล่อง)
+
+  // Medications (ยา)
+  s3Amlodipine5mgBoxes       Float @default(0) // Amlodipine 5mg (กล่อง)
+  s3Amlodipine10mgBoxes      Float @default(0) // Amlodipine 10mg (กล่อง)
+  s3Deferiprone500mgBottles  Float @default(0) // Deferiprone 500mg (ขวด)
+  s3Gabapentin100mgBoxes     Float @default(0) // Gabapentin 100mg (กล่อง)
+  s3Gabapentin300mgBoxes     Float @default(0) // Gabapentin 300mg (กล่อง)
+  s3Omeprazole20mgBoxes      Float @default(0) // Omeprazole 20mg (กล่อง)
+
+  // Chemicals (สารเคมี — ระบบผลิตน้ำประปา)
+  s3AlcoholMl       Float @default(0) // Alcohol (มล.)
+  s3AmmoniaMl       Float @default(0) // Ammonia (มล.)
+  s3NaohKg          Float @default(0) // NaOH โซเดียมไฮดรอกไซด์ (กก.)
+  s3AlumKg          Float @default(0) // สารส้ม (กก.)
+  s3SulfuricAcidKg  Float @default(0) // กรดซัลฟุริค (กก.)
+  s3LimeKg          Float @default(0) // ปูนขาว (กก.)
+  s3ChlorineKg      Float @default(0) // คลอรีน (กก.)
+
+  // Outsourced Fuel (น้ำมันรถจ้างเหมา)
+  s3OutsourceDieselLiters   Float @default(0) // ดีเซลรถจ้าง (ลิตร) EF=2.7406
+  s3OutsourceGasolineLiters Float @default(0) // เบนซินรถจ้าง (ลิตร) EF=2.2394
+
+  // External Waste Disposal (กำจัดของเสียภายนอก)
+  s3GeneralWasteKg            Float @default(0) // มูลฝอยทั่วไป ฝังกลบ (กก.) EF=0.50
+  s3HazardousWasteLandfillKg  Float @default(0) // มูลฝอยอันตราย ฝังกลบ (กก.) EF=0.50
+  s3HazardousWasteIncinKg     Float @default(0) // มูลฝอยอันตราย เผา (กก.) EF=0.50
+  s3InfWasteIncinKg           Float @default(0) // มูลฝอยติดเชื้อ เผาภายนอก (กก.) EF=0.50
+  s3InfWasteAutoclaveExtKg    Float @default(0) // มูลฝอยติดเชื้อ Autoclave ภายนอก (กก.) EF=0.243
+
+  // Business Travel (การเดินทาง)
+  s3TravelCarKm     Float @default(0) // รถยนต์ (กม.) EF=0.168
+  s3TravelPlaneKm   Float @default(0) // เครื่องบินชั้นประหยัด (กม.) EF=0.1539
+
+  // ===================== REDUCTION ACTIVITIES =====================
+  // Recycling (แยกขยะรีไซเคิล)
+  redRecycledPaperKg     Float @default(0)
+  redRecycledAluminumKg  Float @default(0)
+  redRecycledPlasticKg   Float @default(0)
+  redRecycledIronKg      Float @default(0)
+  redRecycledMetalKg     Float @default(0)
+  redRecycledGlassKg     Float @default(0)
+
+  // Composting (ปุ๋ยหมัก)
+  redCompostFoodWasteKg  Float @default(0)
+  redCompostLeafBranchKg Float @default(0)
+  redCompostElecKwh      Float @default(0)
+
+  // Animal Feeding (เลี้ยงสัตว์)
+  redAnimalFeedKg   Float  @default(0)
+  redAnimalType     String?
+
+  // Solar Cell (พลังงานทดแทน)
+  redSolarUsedKwh    Float @default(0) // ไฟฟ้าใช้ในระบบผลิต (kWh)
+  redSolarMeteredKwh Float @default(0) // ไฟฟ้าที่ผลิตได้ (กรณีมีมิเตอร์, kWh)
+  redSolarPanelWatts Float @default(0) // กำลังแผงโซลาร์ (W)
+  redSolarPanelCount Int   @default(0) // จำนวนแผง
+  redSolarDays       Int   @default(0) // วันผลิตไฟฟ้า
+  redSolarHasMeter   Boolean @default(true) // เช็คว่ามีมิเตอร์หรือไม่
+
+  // Trees / GHG Removal (ต้นไม้ — ดูดซับ GHGs)
+  redTreeCount Int @default(0)
+
+  // Other Reductions
+  redTelemedicineCo2e Float  @default(0) // ลดการเดินทางผู้ป่วย (kgCO2e)
+  redOtherCo2e        Float  @default(0) // อื่นๆ (kgCO2e)
+  redOtherDesc        String?
+
+  // ===================== CALCULATED =====================
+  scope1Co2e      Float?
+  scope2Co2e      Float?
+  scope3Co2e      Float?
+  totalCo2e       Float?
+  totalReducedCo2e Float?
+  netCo2e         Float?
+
+  notes  String? @db.Text
+  status String  @default("draft")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
+  deletedBy String?
+
+  @@unique([departmentId, year, month])
+  @@map("carbon_records")
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  password     String
+  name         String
+  roleId       String?
+  role         Role?       @relation(fields: [roleId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+  createdBy    String?
+  updatedBy    String?
+  deletedBy    String?
+
+  @@map("users")
+}
+
+model Role {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  users           User[]
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
+  deletedBy       String?
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
+  deletedBy       String?
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+  createdBy    String?
+  updatedBy    String?
+  deletedBy    String?
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model EmissionFactor {
+  id          String    @id @default(uuid())
+  year        Int
+  category    String    // scope1, scope2, scope3, reduction
+  key         String    // e.g. s1StationaryDiesel
+  name        String    // e.g. ปริมาณดีเซลเครื่องจักร
+  value       Float
+  unit        String    // e.g. kgCO2e/liter
+  source      String?   // แหล่งที่มาของค่าสัมประสิทธิ์
+  sourceUrl   String?   // URL อ้างอิง
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+  updatedBy   String?
+  deletedBy   String?
+
+  @@unique([year, key])
+  @@map("emission_factors")
+}
+
+// ===================== CARBON FORMULA MANAGEMENT =====================
+
+model CarbonFormula {
+  id             String                  @id @default(uuid())
+  fiscalYear     Int                     // ปีงบประมาณ (พ.ศ.) เช่น 2568
+  name           String                  // ชื่อสูตร
+  dataType       String                  // "activity" | "emission_source"
+  version        Int                     @default(1)
+  status         String                  @default("draft") // draft | active | inactive
+  expression     String                  @db.Text          // สูตรคำนวณ เช่น "qty * ef"
+  emissionFactor String?                 // ref key ของ EmissionFactor
+  notes          String?                 @db.Text
+  startDate      DateTime?
+  endDate        DateTime?
+  variables      CarbonFormulaVariable[]
+  history        CarbonFormulaHistory[]
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
+  deletedBy      String?
+
+  @@unique([fiscalYear, name, version])
+  @@map("carbon_formulas")
+}
+
+model CarbonFormulaVariable {
+  id           String        @id @default(uuid())
+  formulaId    String
+  formula      CarbonFormula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  varName      String        // ชื่อตัวแปรใช้ในสูตร เช่น "qty"
+  label        String        // ป้ายชื่อแสดงผล เช่น "ปริมาณ (ลิตร)"
+  unit         String        // หน่วย เช่น "ลิตร"
+  defaultValue Float?
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("carbon_formula_variables")
+}
+
+model CarbonFormulaHistory {
+  id        String        @id @default(uuid())
+  formulaId String
+  formula   CarbonFormula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  action    String        // "created" | "updated" | "status_changed" | "cloned"
+  changedBy String?
+  changedAt DateTime      @default(now())
+  snapshot  String        @db.Text // JSON snapshot ของ formula ก่อนแก้ไข
+
+  @@map("carbon_formula_history")
+}
+
