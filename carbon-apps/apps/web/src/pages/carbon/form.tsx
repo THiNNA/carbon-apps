@@ -327,7 +327,14 @@ export const CarbonRecordForm: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.departmentId) {
+
+    // Regular User ต้องมี departmentId ใน JWT เสมอ
+    if (!isSuperAdmin && !isAdmin && !payload?.departmentId) {
+      showAlert('ไม่มีข้อมูลหน่วยงาน', 'บัญชีผู้ใช้นี้ยังไม่ได้ถูกกำหนดสังกัดหน่วยงาน กรุณาติดต่อผู้ดูแลระบบเพื่อกำหนดหน่วยงานให้บัญชีของคุณ', 'warning');
+      return;
+    }
+
+    if (!formData.departmentId && (isSuperAdmin || isAdmin)) {
       showAlert('ข้อมูลไม่ครบถ้วน', 'กรุณาระบุหน่วยงานก่อนทำการบันทึกข้อมูล', 'warning');
       return;
     }
@@ -338,6 +345,13 @@ export const CarbonRecordForm: React.FC = () => {
     setConfirmSave(false);
     // Convert BE → CE before sending to API
     const body = { ...formData };
+
+    // Regular User: force departmentId = payload.departmentId เสมอ
+    // ป้องกันกรณี dropdown โหลดค่าผิด หรือ payload ไม่ sync กับ formData
+    if (!isSuperAdmin && !isAdmin && payload?.departmentId) {
+      body.departmentId = payload.departmentId;
+    }
+
     if (isEditMode) {
       updateMutation.mutate({ id, body });
     } else {
