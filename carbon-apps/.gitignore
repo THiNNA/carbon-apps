@@ -39,3 +39,8 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Licensing
+*private.pem
+license.json
+!public.pem

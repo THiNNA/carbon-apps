@@ -16,9 +16,13 @@ import { organizationRoutes } from './modules/organizations/routes.js';
 import { departmentRoutes } from './modules/departments/routes.js';
 import { carbonRecordRoutes } from './modules/carbon-records/routes.js';
 import { emissionFactorRoutes } from './modules/emission-factors/routes.js';
+import { transactionLogRoutes } from './modules/transaction-logs/routes.js';
+import { licenseRoutes } from './modules/license/routes.js';
+import { verifyLicense, getLicensePath, getPublicKeyPath } from './common/license/license-verifier.js';
 
 export function buildApp() {
   const app = fastify({
+
     logger: process.env.NODE_ENV === 'production' ? true : {
       transport: {
         target: 'pino-pretty',
@@ -40,6 +44,39 @@ export function buildApp() {
   app.register(rateLimit, {
     max: 1000,
     timeWindow: '1 minute'
+  });
+
+  // Global License Interceptor Hook
+  app.addHook('onRequest', async (request, reply) => {
+    const url = request.url;
+    // Bypass public license endpoints, health check, and static assets
+    const isPublicPath =
+      url === '/' ||
+      url.startsWith('/api/v1/license/status') ||
+      url.startsWith('/api/v1/license/activate');
+
+    if (isPublicPath) {
+      return;
+    }
+
+    const licensePath = getLicensePath();
+    const publicKeyPath = getPublicKeyPath();
+    const licenseResult = verifyLicense(licensePath, publicKeyPath);
+
+    if (!licenseResult.isValid) {
+      return reply.status(402).send(
+        buildApiResponse({
+          success: false,
+          message: licenseResult.message,
+          errors: [
+            {
+              field: 'license',
+              message: 'LICENSE_INVALID'
+            }
+          ]
+        })
+      );
+    }
   });
 
   // Global Error Handler
@@ -116,7 +153,10 @@ export function buildApp() {
   app.register(organizationRoutes, { prefix: '/api/v1/organizations' });
   app.register(departmentRoutes, { prefix: '/api/v1/departments' });
   app.register(emissionFactorRoutes, { prefix: '/api/v1/emission-factors' });
+  app.register(transactionLogRoutes, { prefix: '/api/v1/transaction-logs' });
+  app.register(licenseRoutes, { prefix: '/api/v1/license' });
 
   return app;
 }
+
 export type App = ReturnType<typeof buildApp>;

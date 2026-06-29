@@ -3,6 +3,7 @@ import { departmentService } from './service.js';
 import { buildApiResponse } from '@enterprise/shared-utils';
 import { DEFAULT_PAGE, DEFAULT_LIMIT } from '../../common/constants/index.js';
 import { BadRequestError, ForbiddenError } from '../../common/errors/custom-errors.js';
+import { transactionLogService } from '../transaction-logs/service.js';
 
 export class DepartmentController {
   async list(request: FastifyRequest, reply: FastifyReply) {
@@ -66,6 +67,23 @@ export class DepartmentController {
     }
 
     const dept = await departmentService.create(data, creatorId);
+
+    // บันทึก Log การสร้างหน่วยงาน
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'Department',
+      targetId: dept.id,
+      targetName: `${dept.name} (${dept.code})`,
+      newValue: JSON.stringify(dept),
+      requestData: JSON.stringify(data),
+      responseData: JSON.stringify(dept),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.status(201).send(buildApiResponse({ success: true, message: 'Department created', data: dept }));
   }
 
@@ -87,6 +105,24 @@ export class DepartmentController {
     }
 
     const dept = await departmentService.update(id, data, updaterId);
+
+    // บันทึก Log การแก้ไขหน่วยงาน
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'UPDATE',
+      module: 'Department',
+      targetId: id,
+      targetName: `${dept.name} (${dept.code})`,
+      oldValue: JSON.stringify(existing),
+      newValue: JSON.stringify(dept),
+      requestData: JSON.stringify({ id, body: data }),
+      responseData: JSON.stringify(dept),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'Department updated', data: dept }));
   }
 
@@ -103,8 +139,26 @@ export class DepartmentController {
     }
 
     await departmentService.delete(id);
+
+    // บันทึก Log การลบหน่วยงาน
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'DELETE',
+      module: 'Department',
+      targetId: id,
+      targetName: `${existing.name} (${existing.code})`,
+      oldValue: JSON.stringify(existing),
+      requestData: JSON.stringify({ id }),
+      responseData: JSON.stringify({ success: true, message: 'Department deleted' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'Department deleted' }));
   }
 }
+
 
 export const departmentController = new DepartmentController();

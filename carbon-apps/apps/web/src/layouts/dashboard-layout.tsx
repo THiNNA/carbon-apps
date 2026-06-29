@@ -2,6 +2,8 @@ import React from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/auth-context.js';
 import { Breadcrumbs } from '../components/breadcrumb.js';
+import api from '../services/api.js';
+
 import {
   LayoutDashboard,
   Users,
@@ -17,14 +19,45 @@ import {
   Building2,
   Layers,
   DatabaseZap,
-  Settings2
+  Settings2,
+  History,
+  AlertTriangle
 } from 'lucide-react';
+
 
 export const DashboardLayout: React.FC = () => {
   const { user, payload, logout } = useAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isAdminOpen, setIsAdminOpen] = React.useState(true);
+
+  // License Expiry Check states
+  const [licenseWarning, setLicenseWarning] = React.useState(false);
+  const [licenseDaysLeft, setLicenseDaysLeft] = React.useState<number | null>(null);
+  const [licenseExpiry, setLicenseExpiry] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const checkLicense = async () => {
+      try {
+        const res: any = await api.get('/license/status');
+        if (res?.data?.isValid) {
+          const expiresAt = new Date(res.data.expiresAt);
+          const diffTime = expiresAt.getTime() - Date.now();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays <= 30) {
+            setLicenseWarning(true);
+            setLicenseDaysLeft(diffDays);
+            setLicenseExpiry(res.data.expiresAt);
+          }
+        }
+      } catch (err) {
+        // Silent catch: Axios interceptor handles hard errors (402)
+      }
+    };
+    checkLicense();
+  }, []);
+
   const [isMobileAdminOpen, setIsMobileAdminOpen] = React.useState(true);
   const [isOrgOpen, setIsOrgOpen] = React.useState(true);
   const [isMobileOrgOpen, setIsMobileOrgOpen] = React.useState(true);
@@ -43,7 +76,9 @@ export const DashboardLayout: React.FC = () => {
   const adminItems = [
     { label: 'จัดการบทบาท', path: '/roles', icon: <Shield size={18} className="text-indigo-400" />, show: payload?.roles.includes('SuperAdmin') },
     { label: 'สิทธิ์การใช้งาน', path: '/permissions', icon: <Key size={18} className="text-amber-400" />, show: payload?.roles.includes('SuperAdmin') },
+    { label: 'ประวัติธุรกรรมระบบ', path: '/settings/transaction-logs', icon: <History size={18} className="text-cyan-400" />, show: payload?.roles.includes('SuperAdmin') },
   ];
+
 
   const orgItems = [
     { label: 'จัดการองค์กร', path: '/organizations', icon: <Building2 size={18} className="text-blue-400" />, show: payload?.roles.includes('SuperAdmin') },
@@ -317,6 +352,22 @@ export const DashboardLayout: React.FC = () => {
 
         {/* Content Body */}
         <main className="flex-1 flex flex-col min-h-0 px-6 pt-6 md:px-8 bg-slate-100/60 overflow-y-auto">
+          {licenseWarning && (
+            <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg flex justify-between items-center text-xs shadow-sm shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-amber-500 shrink-0" size={16} />
+                <span>
+                  <strong>แจ้งเตือนลิขสิทธิ์:</strong> สิทธิ์ใช้งานระบบของคุณจะหมดอายุในอีก <strong>{licenseDaysLeft}</strong> วัน (หมดอายุวันที่ {licenseExpiry ? new Date(licenseExpiry).toLocaleDateString('th-TH') : ''}) โปรดติดต่อผู้พัฒนาเพื่อต่อสิทธิ์ใช้งาน
+                </span>
+              </div>
+              <button 
+                onClick={() => navigate('/license-activation')}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1 rounded transition-colors shrink-0"
+              >
+                จัดการลิขสิทธิ์
+              </button>
+            </div>
+          )}
           <Breadcrumbs />
           <div className="flex-1 flex flex-col min-h-0">
             <Outlet />

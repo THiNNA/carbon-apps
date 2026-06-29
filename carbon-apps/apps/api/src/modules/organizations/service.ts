@@ -1,6 +1,8 @@
 import { organizationRepository } from './repository.js';
 import { OrganizationDto, CreateOrganizationDto, UpdateOrganizationDto } from '@enterprise/shared-types';
 import { BadRequestError, NotFoundError } from '../../common/errors/custom-errors.js';
+import { verifyLicense } from '../../common/license/license-verifier.js';
+
 
 function toDto(org: any): OrganizationDto {
   return {
@@ -44,6 +46,14 @@ export class OrganizationService {
   }
 
   async create(data: CreateOrganizationDto, creatorId?: string): Promise<OrganizationDto> {
+    const verification = verifyLicense();
+    if (verification.isValid && verification.licenseData) {
+      const currentCount = await organizationRepository.count();
+      if (currentCount >= verification.licenseData.maxOrganizations) {
+        throw new BadRequestError('จำนวนองค์กรในระบบเกินขีดจำกัดตามสัญญาสิทธิ์ใช้งานแล้ว (Organization limit reached according to system license)');
+      }
+    }
+
     const existing = await organizationRepository.findByCode(data.code);
     if (existing) throw new BadRequestError(`Organization code "${data.code}" already exists`);
     const org = await organizationRepository.create(data, creatorId);
@@ -64,6 +74,12 @@ export class OrganizationService {
   async delete(id: string) {
     const org = await organizationRepository.findById(id);
     if (!org) throw new NotFoundError('Organization not found');
+
+    const userCount = await organizationRepository.countUsers(id);
+    if (userCount > 0) {
+      throw new BadRequestError(`ไม่สามารถลบองค์การ "${org.name}" ได้ เนื่องจากยังมีผู้ใช้งานจำนวน ${userCount} คนสังกัดอยู่ในหน่วยงานภายใต้องค์การนี้`);
+    }
+
     return organizationRepository.delete(id);
   }
 }

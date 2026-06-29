@@ -87,6 +87,20 @@ export class OrganizationRepository {
     });
   }
 
+  async count(): Promise<number> {
+    return prisma.organization.count();
+  }
+
+  async countUsers(id: string): Promise<number> {
+    return prisma.user.count({
+      where: {
+        department: {
+          organizationId: id
+        }
+      }
+    });
+  }
+
   async delete(id: string) {
     return prisma.organization.delete({
       where: { id }

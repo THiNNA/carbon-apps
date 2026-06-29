@@ -1,6 +1,8 @@
 import { userRepository } from './repository.js';
 import { CreateUserDto, UpdateUserDto, UserDto } from '@enterprise/shared-types';
 import { BadRequestError, NotFoundError } from '../../common/errors/custom-errors.js';
+import { verifyLicense } from '../../common/license/license-verifier.js';
+
 
 function toDto(user: any): UserDto {
   return {
@@ -67,6 +69,14 @@ export class UserService {
   }
 
   async create(data: CreateUserDto, creatorId?: string): Promise<UserDto> {
+    const verification = verifyLicense();
+    if (verification.isValid && verification.licenseData && data.departmentId) {
+      const currentCount = await userRepository.countByDepartmentOrganization(data.departmentId);
+      if (currentCount >= verification.licenseData.maxUsers) {
+        throw new BadRequestError('จำนวนบัญชีผู้ใช้ในองค์กรนี้เกินขีดจำกัดตามสัญญาสิทธิ์ใช้งานแล้ว (User limit reached for this organization according to system license)');
+      }
+    }
+
     const existing = await userRepository.findByEmail(data.email);
     if (existing) throw new BadRequestError('Email already registered');
     const user = await userRepository.create(data, creatorId);

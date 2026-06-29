@@ -459,3 +459,41 @@ export interface CloneFormulaDto {
   toFiscalYear: number;
   formulaIds?: string[]; // ถ้าไม่ระบุ = clone ทั้งหมดของปีนั้น
 }
+
+// --- Transaction Log DTOs ---
+export interface TransactionLogDto {
+  id: string;
+  userId?: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
+  action: string; // "CREATE" | "UPDATE" | "DELETE" | "LOGIN"
+  module: string; // "CarbonRecord" | "User" | "Organization" | "Department" | "Role" | "EmissionFactor" | "CarbonFormula"
+  targetId?: string | null;
+  targetName?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  requestData?: string | null;
+  responseData?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  createdAt: Date;
+}
+
+// --- License DTOs ---
+export interface LicenseStatusDto {
+  isValid: boolean;
+  message: string;
+  customer?: string | null;
+  issuedAt?: string | null;
+  expiresAt?: string | null;
+  maxUsers?: number | null;
+  maxOrganizations?: number | null;
+  hardwareId?: string | null;
+  currentMachineId?: string | null;
+}
+
+export interface ActivateLicenseDto {
+  licenseKey: string;
+}
+
+

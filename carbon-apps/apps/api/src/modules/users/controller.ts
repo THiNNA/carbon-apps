@@ -4,6 +4,7 @@ import { buildApiResponse } from '@enterprise/shared-utils';
 import { DEFAULT_PAGE, DEFAULT_LIMIT } from '../../common/constants/index.js';
 import { BadRequestError, ForbiddenError } from '../../common/errors/custom-errors.js';
 import { prisma } from '../../common/database/prisma.js';
+import { transactionLogService } from '../transaction-logs/service.js';
 
 export class UserController {
   async list(request: FastifyRequest, reply: FastifyReply) {
@@ -83,6 +84,27 @@ export class UserController {
     }
 
     const created = await userService.create(data, creatorId);
+
+    // บันทึก Log การสร้างผู้ใช้ พร้อมปิดบังรหัสผ่าน (Security Filter)
+    const safeData = { ...data };
+    if (safeData.password) safeData.password = '******';
+    const safeResponse = { id: created.id, name: created.name, email: created.email, roleId: created.roleId, departmentId: created.departmentId };
+
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'User',
+      targetId: created.id,
+      targetName: `${created.name} (${created.email})`,
+      newValue: JSON.stringify(safeResponse),
+      requestData: JSON.stringify(safeData),
+      responseData: JSON.stringify(safeResponse),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.status(201).send(buildApiResponse({ success: true, message: 'User created successfully', data: created }));
   }
 
@@ -120,6 +142,28 @@ export class UserController {
     }
 
     const updated = await userService.update(id, data, updaterId);
+
+    // บันทึก Log การแก้ไขผู้ใช้ พร้อมปิดบังรหัสผ่าน (Security Filter)
+    const safeData = { ...data };
+    if (safeData.password) safeData.password = '******';
+    const safeResponse = { id: updated.id, name: updated.name, email: updated.email, roleId: updated.roleId, departmentId: updated.departmentId };
+
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'UPDATE',
+      module: 'User',
+      targetId: id,
+      targetName: `${updated.name} (${updated.email})`,
+      oldValue: JSON.stringify({ id: existing.id, name: existing.name, email: existing.email, roleId: existing.roleId, departmentId: existing.departmentId }),
+      newValue: JSON.stringify(safeResponse),
+      requestData: JSON.stringify({ id, body: safeData }),
+      responseData: JSON.stringify(safeResponse),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'User updated successfully', data: updated }));
   }
 
@@ -140,7 +184,25 @@ export class UserController {
     }
 
     await userService.delete(id);
+
+    // บันทึก Log การลบผู้ใช้
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'DELETE',
+      module: 'User',
+      targetId: id,
+      targetName: `${existing.name} (${existing.email})`,
+      oldValue: JSON.stringify({ id: existing.id, name: existing.name, email: existing.email, roleId: existing.roleId, departmentId: existing.departmentId }),
+      requestData: JSON.stringify({ id }),
+      responseData: JSON.stringify({ success: true, message: 'User deleted successfully' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'User deleted successfully' }));
   }
 }
+
 export const userController = new UserController();

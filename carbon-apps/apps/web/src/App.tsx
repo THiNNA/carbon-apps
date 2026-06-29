@@ -21,8 +21,12 @@ const DepartmentList    = lazy(() => import('./pages/departments/list.js').then(
 const CarbonRecordList  = lazy(() => import('./pages/carbon/list.js').then(m => ({ default: m.CarbonRecordList })));
 const CarbonRecordForm  = lazy(() => import('./pages/carbon/form.js').then(m => ({ default: m.CarbonRecordForm })));
 const EmissionFactorList = lazy(() => import('./pages/emission/list.js').then(m => ({ default: m.EmissionFactorList })));
+const TransactionLogs   = lazy(() => import('./pages/settings/transaction-logs.js').then(m => ({ default: m.TransactionLogs })));
+const LicenseActivation = lazy(() => import('./pages/settings/license-activation.js').then(m => ({ default: m.LicenseActivation })));
+
 
 // ─── Shared page loading fallback ────────────────────────────────────────────
+
 const PageLoader: React.FC = () => (
   <div className="flex h-screen items-center justify-center">
     <LoadingSpinner size="lg" />
@@ -51,6 +55,10 @@ export const App: React.FC = () => {
                   <Route path="/login" element={<Login />} />
                 </Route>
 
+                {/* License Activation Route (Unprotected) */}
+                <Route path="/license-activation" element={<LicenseActivation />} />
+
+
                 {/* Protected Routes */}
                 <Route element={<ProtectedRoute />}>
                   <Route element={<DashboardLayout />}>
@@ -65,6 +73,7 @@ export const App: React.FC = () => {
                     <Route path="/carbon/edit/:id" element={<CarbonRecordForm />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/emission-factors" element={<EmissionFactorList />} />
+                    <Route path="/settings/transaction-logs" element={<TransactionLogs />} />
 
                     <Route path="/settings" element={<Navigate to="/profile" replace />} />
                   </Route>

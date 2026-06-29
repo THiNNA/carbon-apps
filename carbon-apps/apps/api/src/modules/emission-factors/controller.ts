@@ -2,6 +2,8 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { emissionFactorService } from './service.js';
 import { buildApiResponse } from '@enterprise/shared-utils';
 import { BadRequestError, ForbiddenError } from '../../common/errors/custom-errors.js';
+import { transactionLogService } from '../transaction-logs/service.js';
+
 
 export class EmissionFactorController {
   async groups(request: FastifyRequest, reply: FastifyReply) {
@@ -43,11 +45,36 @@ export class EmissionFactorController {
       throw new ForbiddenError('เฉพาะ SuperAdmin เท่านั้นที่สามารถแก้ไขค่ามาตรฐานเริ่มต้นของระบบได้');
     }
 
+    // ดึงค่าเก่าก่อนอัปเดต
+    const oldFactors = await emissionFactorService.list(year, organizationId);
+
     await emissionFactorService.bulkUpdate(year, organizationId, factors, userId);
+
+    // ดึงค่าใหม่หลังอัปเดต
+    const newFactors = await emissionFactorService.list(year, organizationId);
+
+    // บันทึก Log การ Bulk Update
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'UPDATE',
+      module: 'EmissionFactor',
+      targetId: organizationId,
+      targetName: `ปรับปรุงค่าสัมประสิทธิ์กลุ่ม (Bulk Update) ปี ${year}`,
+      oldValue: JSON.stringify(oldFactors),
+      newValue: JSON.stringify(newFactors),
+      requestData: JSON.stringify({ year, organizationId, factorsCount: factors.length }),
+      responseData: JSON.stringify({ success: true, message: 'Emission factors updated successfully' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({
       success: true,
       message: 'Emission factors updated successfully'
     }));
+
   }
 
   async clone(request: FastifyRequest, reply: FastifyReply) {
@@ -63,10 +90,28 @@ export class EmissionFactorController {
     }
 
     await emissionFactorService.clone(fromYear, fromOrgId, toYear, toOrgId, userId);
+
+    // บันทึก Log การ Clone
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'EmissionFactor',
+      targetId: toOrgId,
+      targetName: `โคลนค่าสัมประสิทธิ์จากปี ${fromYear} ไปยังปี ${toYear}`,
+      newValue: JSON.stringify({ fromYear, fromOrgId, toYear, toOrgId }),
+      requestData: JSON.stringify(body),
+      responseData: JSON.stringify({ success: true, message: 'Emission factors cloned successfully' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({
       success: true,
       message: 'Emission factors cloned successfully'
     }));
+
   }
 
   async create(request: FastifyRequest, reply: FastifyReply) {
@@ -96,11 +141,28 @@ export class EmissionFactorController {
       organizationId
     }, userId);
 
+    // บันทึก Log การสร้างสัมประสิทธิ์ตัวเดียว
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'EmissionFactor',
+      targetId: factor.id,
+      targetName: `${factor.name} (${factor.key}) ปี ${factor.year}`,
+      newValue: JSON.stringify(factor),
+      requestData: JSON.stringify(body),
+      responseData: JSON.stringify(factor),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({
       success: true,
       message: 'Emission factor created successfully',
       data: factor
     }));
+
   }
 
   async initialize(request: FastifyRequest, reply: FastifyReply) {
@@ -114,10 +176,28 @@ export class EmissionFactorController {
     }
 
     await emissionFactorService.initialize(year, organizationId, userId);
+
+    // บันทึก Log การ Initialize
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'EmissionFactor',
+      targetId: organizationId,
+      targetName: `สร้างชุดสัมประสิทธิ์เริ่มต้นระบบ ปี ${year}`,
+      newValue: JSON.stringify({ year, organizationId }),
+      requestData: JSON.stringify(body),
+      responseData: JSON.stringify({ success: true, message: 'Emission factors initialized successfully' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({
       success: true,
       message: 'Emission factors initialized successfully'
     }));
+
   }
 
   async delete(request: FastifyRequest, reply: FastifyReply) {
@@ -137,11 +217,32 @@ export class EmissionFactorController {
       throw new ForbiddenError('เฉพาะ SuperAdmin เท่านั้นที่สามารถลบค่ามาตรฐานเริ่มต้นของระบบได้');
     }
 
+    // ดึงค่าเก่าเก็บไว้ก่อนลบ
+    const oldFactors = await emissionFactorService.list(year, organizationId);
+
     await emissionFactorService.deleteByYearAndOrg(year, organizationId, userId);
+
+    // บันทึก Log การลบยกรวมปีงบประมาณ
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'DELETE',
+      module: 'EmissionFactor',
+      targetId: organizationId,
+      targetName: `ลบค่าสัมประสิทธิ์ยกรวมปีงบประมาณ ปี ${year}`,
+      oldValue: JSON.stringify(oldFactors),
+      requestData: JSON.stringify({ year, organizationId }),
+      responseData: JSON.stringify({ success: true, message: 'Emission factors for the year and organization deleted successfully' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({
       success: true,
       message: 'Emission factors for the year and organization deleted successfully'
     }));
+
   }
 
   async getById(request: FastifyRequest, reply: FastifyReply) {
@@ -166,6 +267,9 @@ export class EmissionFactorController {
       }
     }
 
+    // ดึงค่าเก่าก่อนอัปเดต
+    const oldVal = await emissionFactorService.getById(id);
+
     const factor = await emissionFactorService.update(id, {
       name: body.name,
       value: body.value !== undefined ? parseFloat(body.value) : undefined,
@@ -173,7 +277,26 @@ export class EmissionFactorController {
       source: body.source ?? null,
       sourceUrl: body.sourceUrl ?? null
     }, userId);
+
+    // บันทึก Log การอัปเดตตัวเดียว
+    await transactionLogService.log({
+      userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'UPDATE',
+      module: 'EmissionFactor',
+      targetId: id,
+      targetName: `${factor.name} (${factor.key}) ปี ${factor.year}`,
+      oldValue: JSON.stringify(oldVal),
+      newValue: JSON.stringify(factor),
+      requestData: JSON.stringify({ id, body }),
+      responseData: JSON.stringify(factor),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'Updated successfully', data: factor }));
+
   }
 
   // ─── System Defaults Endpoints ─────────────────────────────────────────

@@ -95,6 +95,27 @@ export class UserRepository {
     return prisma.user.update({ where: { id }, data: updateData, include: userInclude });
   }
 
+  async count(): Promise<number> {
+    return prisma.user.count();
+  }
+
+  async countByDepartmentOrganization(departmentId: string): Promise<number> {
+    const dept = await prisma.department.findUnique({
+      where: { id: departmentId },
+      select: { organizationId: true }
+    });
+    if (!dept || !dept.organizationId) {
+      return 0;
+    }
+    return prisma.user.count({
+      where: {
+        department: {
+          organizationId: dept.organizationId
+        }
+      }
+    });
+  }
+
   async delete(id: string) {
     return prisma.user.delete({ where: { id } });
   }

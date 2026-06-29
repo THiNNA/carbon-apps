@@ -4,6 +4,7 @@ import { buildApiResponse } from '@enterprise/shared-utils';
 import { DEFAULT_PAGE, DEFAULT_LIMIT } from '../../common/constants/index.js';
 import { BadRequestError, ForbiddenError } from '../../common/errors/custom-errors.js';
 import { prisma } from '../../common/database/prisma.js';
+import { transactionLogService } from '../transaction-logs/service.js';
 
 export class CarbonRecordController {
   async list(request: FastifyRequest, reply: FastifyReply) {
@@ -89,6 +90,23 @@ export class CarbonRecordController {
     }
 
     const record = await carbonRecordService.create(data, creatorId);
+
+    // บันทึก Log การบันทึกข้อมูลคาร์บอนใหม่
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'CREATE',
+      module: 'CarbonRecord',
+      targetId: record.id,
+      targetName: `บันทึกคาร์บอนหน่วยงาน ${record.department?.name || record.departmentId} ปี ${record.year} เดือน ${record.month}`,
+      newValue: JSON.stringify(record),
+      requestData: JSON.stringify(data),
+      responseData: JSON.stringify(record),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.status(201).send(buildApiResponse({ success: true, message: 'Carbon record created', data: record }));
   }
 
@@ -123,6 +141,24 @@ export class CarbonRecordController {
     }
 
     const record = await carbonRecordService.update(id, data, updaterId);
+
+    // บันทึก Log การปรับปรุงข้อมูลคาร์บอน
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'UPDATE',
+      module: 'CarbonRecord',
+      targetId: id,
+      targetName: `ปรับปรุงคาร์บอนหน่วยงาน ${record.department?.name || record.departmentId} ปี ${record.year} เดือน ${record.month}`,
+      oldValue: JSON.stringify(existing),
+      newValue: JSON.stringify(record),
+      requestData: JSON.stringify({ id, body: data }),
+      responseData: JSON.stringify(record),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'Carbon record updated', data: record }));
   }
 
@@ -145,8 +181,26 @@ export class CarbonRecordController {
     }
 
     await carbonRecordService.delete(id);
+
+    // บันทึก Log การลบข้อมูลคาร์บอน
+    await transactionLogService.log({
+      userId: request.user?.userId,
+      userEmail: request.user?.email,
+      userName: request.user?.email,
+      action: 'DELETE',
+      module: 'CarbonRecord',
+      targetId: id,
+      targetName: `ลบคาร์บอนหน่วยงาน ${existing.department?.name || existing.departmentId} ปี ${existing.year} เดือน ${existing.month}`,
+      oldValue: JSON.stringify(existing),
+      requestData: JSON.stringify({ id }),
+      responseData: JSON.stringify({ success: true, message: 'Carbon record deleted' }),
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent']
+    });
+
     return reply.send(buildApiResponse({ success: true, message: 'Carbon record deleted' }));
   }
 }
+
 
 export const carbonRecordController = new CarbonRecordController();

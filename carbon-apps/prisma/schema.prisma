@@ -345,3 +345,28 @@ model CarbonFormulaHistory {
   @@map("carbon_formula_history")
 }
 
+model TransactionLog {
+  id          String   @id @default(uuid())
+  userId      String?  // ไอดีผู้ใช้งาน (null = ระบบหรือผู้ใช้ภายนอก)
+  userEmail   String?  // อีเมลผู้ใช้เพื่อการค้นหาด่วน
+  userName    String?  // ชื่อผู้ใช้ ณ ขณะทำรายการ
+  action      String   // ประเภทการกระทำ: "CREATE" | "UPDATE" | "DELETE" | "LOGIN"
+  module      String   // โมดูลที่ดำเนินการ: "CarbonRecord" | "User" | "Organization" | "Department" | "Role" | "EmissionFactor" | "CarbonFormula"
+  targetId    String?  // ไอดีข้อมูลเป้าหมาย
+  targetName  String?  // ชื่อ/รหัส หรือคีย์ที่เข้าใจง่ายของข้อมูลเป้าหมาย
+  oldValue     String?  @db.Text // ข้อมูลเก่า (JSON String)
+  newValue     String?  @db.Text // ข้อมูลใหม่ (JSON String)
+  requestData  String?  @db.Text // ข้อมูลส่งเข้า (Request Body/Params)
+  responseData String?  @db.Text // ข้อมูลตอบกลับ (Response Body)
+  ipAddress    String?  // ไอพีผู้ใช้งาน
+
+  userAgent   String?  // เบราว์เซอร์/เครื่องมือที่ส่งคำขอ
+  createdAt   DateTime @default(now())
+
+  @@index([module])
+  @@index([action])
+  @@index([createdAt])
+  @@map("transaction_logs")
+}
+
+

@@ -83,6 +83,12 @@ export class DepartmentService {
   async delete(id: string) {
     const dept = await departmentRepository.findById(id);
     if (!dept) throw new NotFoundError('Department not found');
+
+    const userCount = await departmentRepository.countUsers(id);
+    if (userCount > 0) {
+      throw new BadRequestError(`ไม่สามารถลบหน่วยงาน "${dept.name}" ได้ เนื่องจากยังมีผู้ใช้งานจำนวน ${userCount} คนสังกัดอยู่ในหน่วยงานนี้`);
+    }
+
     return departmentRepository.delete(id);
   }
 }

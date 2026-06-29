@@ -90,6 +90,12 @@ export class DepartmentRepository {
     });
   }
 
+  async countUsers(id: string): Promise<number> {
+    return prisma.user.count({
+      where: { departmentId: id }
+    });
+  }
+
   async delete(id: string) {
     return prisma.department.delete({
       where: { id }

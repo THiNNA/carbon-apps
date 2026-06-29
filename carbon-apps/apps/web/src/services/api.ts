@@ -112,6 +112,15 @@ api.interceptors.response.use(
       errors: [],
     };
 
+    // Handle License Error (HTTP 402 Payment Required)
+    if (error.response?.status === 402) {
+      const isLicenseInvalid = standardError.errors?.some((err: any) => err.message === 'LICENSE_INVALID');
+      if (isLicenseInvalid && window.location.pathname !== '/license-activation') {
+        window.location.href = '/license-activation';
+        return Promise.reject(standardError);
+      }
+    }
+
     return Promise.reject(standardError);
   }
 );

@@ -25,6 +25,20 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   }
 }
 
+export async function optionalAuthenticate(request: FastifyRequest, reply: FastifyReply) {
+  try {
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const payload = verifyToken<TokenPayload>(token, config.JWT_ACCESS_SECRET);
+      request.user = payload;
+    }
+  } catch (error) {
+    // Ignore error in optional authentication
+  }
+}
+
+
 export function requirePermission(permission: string) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.user) {
