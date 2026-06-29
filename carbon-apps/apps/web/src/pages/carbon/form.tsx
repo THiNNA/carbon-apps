@@ -254,7 +254,7 @@ export const CarbonRecordForm: React.FC = () => {
     });
   };
 
-  // Fetch organization list
+  // Fetch organization list (SuperAdmin เห็นทั้งหมด, Admin/User เห็นขององค์กรตัวเอง)
   const { data: orgs } = useQuery<OrganizationDto[]>({
     queryKey: ['organizations-all'],
     queryFn: async () => { const res: any = await api.get('/organizations', { params: { limit: 100 } }); return res.data; },
@@ -262,11 +262,25 @@ export const CarbonRecordForm: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch departments matching formOrgId
+  // สำหรับ Admin/User ที่มี organizationId — ดึงข้อมูล org ของตัวเอง
+  const { data: myOrg } = useQuery<OrganizationDto>({
+    queryKey: ['organization-mine', payload?.organizationId],
+    queryFn: async () => { const res: any = await api.get(`/organizations/${payload!.organizationId}`); return res.data; },
+    enabled: !isSuperAdmin && !!payload?.organizationId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ชื่อองค์กรที่แสดงใน label (สำหรับ Admin/User)
+  const orgDisplayName = isSuperAdmin
+    ? (orgs?.find(o => o.id === formOrgId)?.name || '')
+    : (myOrg?.name || '');
+
+  // Fetch departments: SuperAdmin/Admin ใช้ formOrgId, User ธรรมดาใช้ organizationId จาก payload
+  const deptOrgId = (isSuperAdmin || isAdmin) ? formOrgId : (payload?.organizationId || '');
   const { data: formDepts } = useQuery<DepartmentDto[]>({
-    queryKey: ['departments-all-form', formOrgId],
-    queryFn: async () => { const res: any = await api.get('/departments/all', { params: { organizationId: formOrgId || undefined } }); return res.data; },
-    enabled: (isSuperAdmin || isAdmin) && !!formOrgId,
+    queryKey: ['departments-all-form', deptOrgId],
+    queryFn: async () => { const res: any = await api.get('/departments/all', { params: { organizationId: deptOrgId || undefined } }); return res.data; },
+    enabled: !!deptOrgId,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -400,10 +414,14 @@ export const CarbonRecordForm: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">องค์กร</label>
-                      <select value={formOrgId} onChange={e => { setFormOrgId(e.target.value); sf({ ...f, departmentId: '' }); }} className={ic} disabled={isEditMode || !isSuperAdmin}>
-                        <option value="">-- เลือกองค์กร --</option>
-                        {orgs?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                      </select>
+                      {isSuperAdmin ? (
+                        <select value={formOrgId} onChange={e => { setFormOrgId(e.target.value); sf({ ...f, departmentId: '' }); }} className={ic} disabled={isEditMode}>
+                          <option value="">-- เลือกองค์กร --</option>
+                          {orgs?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                        </select>
+                      ) : (
+                        <input type="text" readOnly value={orgDisplayName || 'กำลังโหลด...'} className={`${ic} bg-slate-50 text-slate-500 cursor-not-allowed`} />
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">หน่วยงาน <span className="text-rose-500">*</span></label>
@@ -415,7 +433,7 @@ export const CarbonRecordForm: React.FC = () => {
                         disabled={isEditMode || (!isSuperAdmin && !isAdmin) || (isSuperAdmin && !formOrgId)}
                       >
                         <option value="">-- เลือกหน่วยงาน --</option>
-                        {formOrgId && formDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        {formDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                       </select>
                     </div>
                   </div>

@@ -50,7 +50,7 @@ export const EmissionFactorList: React.FC = () => {
     }
   }, [isSuperAdmin, userOrgId]);
 
-  // Load Organizations list for dropdown filter
+  // Load Organizations list for dropdown filter (SuperAdmin เห็นทั้งหมด)
   const { data: orgs } = useQuery<OrganizationDto[]>({
     queryKey: ['organizations-list-filter'],
     queryFn: async () => {
@@ -59,6 +59,17 @@ export const EmissionFactorList: React.FC = () => {
     },
     enabled: isSuperAdmin,
     staleTime: 5 * 60 * 1000, // cache 5 นาที
+  });
+
+  // สำหรับ Admin/User — ดึงชื่อองค์กรตัวเองเพื่อแสดงใน filter label
+  const { data: myOrg } = useQuery<OrganizationDto>({
+    queryKey: ['organization-mine-ef', userOrgId],
+    queryFn: async () => {
+      const res: any = await api.get(`/organizations/${userOrgId}`);
+      return res.data;
+    },
+    enabled: !isSuperAdmin && !!userOrgId,
+    staleTime: 10 * 60 * 1000,
   });
 
   // Load Groups (Emission Factors grouped by year and org)
@@ -316,19 +327,25 @@ export const EmissionFactorList: React.FC = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">หน่วยงาน / องค์กร</label>
-            <Select2
-              disabled={!isSuperAdmin}
-              value={filterOrgId}
-              onChange={val => { setFilterOrgId(val); setPage(1); }}
-              options={[
-                ...(isSuperAdmin ? [
+            {isSuperAdmin ? (
+              <Select2
+                value={filterOrgId}
+                onChange={val => { setFilterOrgId(val); setPage(1); }}
+                options={[
                   { value: '', label: 'ทั้งหมด' },
-                  { value: '9aa50b44-7854-46ea-b50e-4553b58c0e00', label: 'ค่ามาตรฐานระบบ' }
-                ] : []),
-                ...(orgs?.map(o => ({ value: o.id, label: o.name })) ?? [])
-              ]}
-              className="min-w-[280px]"
-            />
+                  { value: '9aa50b44-7854-46ea-b50e-4553b58c0e00', label: 'ค่ามาตรฐานระบบ' },
+                  ...(orgs?.map(o => ({ value: o.id, label: o.name })) ?? [])
+                ]}
+                className="min-w-[280px]"
+              />
+            ) : (
+              <input
+                type="text"
+                readOnly
+                value={myOrg?.name ?? (userOrgId ? 'กำลังโหลด...' : 'ไม่ระบุองค์กร')}
+                className="min-w-[280px] px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+              />
+            )}
           </div>
 
 
