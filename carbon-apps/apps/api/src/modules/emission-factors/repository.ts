@@ -73,6 +73,10 @@ export class EmissionFactorRepository {
   }
 
   async bulkUpdate(year: number, organizationId: string, factors: Array<{ key: string; value: number }>, userId?: string) {
+    // 1. รับประกันว่าทุกคีย์ตัวคูณมีแถวข้อมูลอยู่ใน DB เสมอ (สร้างแถวที่ขาดด้วย initialize โดยไม่เขียนทับค่าที่แก้ไปแล้ว)
+    await this.initialize(year, organizationId, userId);
+
+    // 2. อัปเดตค่าตัวคูณจริง
     return prisma.$transaction(
       factors.map(f =>
         prisma.emissionFactor.updateMany({
@@ -357,6 +361,48 @@ export class EmissionFactorRepository {
         source: 'DEFRA UK — GHG Conversion Factors for Company Reporting (Domestic/Short-haul Economy)',
         sourceUrl: 'https://www.gov.uk/government/publications/greenhouse-gas-reporting-conversion-factors-2023'
       },
+      {
+        category: 'scope3', key: 's3TonerCartridges',
+        name: 'ตลับหมึกพิมพ์เลเซอร์', value: 4.8000, unit: 'kgCO2e/ตลับ',
+        source: 'อ้างอิงทั่วไป — HP/Xerox LCA average value',
+        sourceUrl: 'https://www.hp.com'
+      },
+      {
+        category: 'scope3', key: 's3AlcoholMl',
+        name: 'ปริมาณการใช้ Alcohol', value: 0.0021, unit: 'kgCO2e/มล.',
+        source: 'อ้างอิงทั่วไป — Ethanol GWP average (2.1 kgCO2e/L)',
+        sourceUrl: ''
+      },
+      {
+        category: 'scope3', key: 's3NaohKg',
+        name: 'โซดาไฟ NaOH', value: 1.1200, unit: 'kgCO2e/กก.',
+        source: 'อ้างอิงทั่วไป — Chlor-alkali NaOH (50% solution)',
+        sourceUrl: ''
+      },
+      {
+        category: 'scope3', key: 's3AlumKg',
+        name: 'สารส้ม', value: 0.2000, unit: 'kgCO2e/กก.',
+        source: 'อ้างอิงทั่วไป — Aluminum sulfate footprint',
+        sourceUrl: ''
+      },
+      {
+        category: 'scope3', key: 's3SulfuricAcidKg',
+        name: 'กรดซัลฟิวริก', value: 0.2500, unit: 'kgCO2e/กก.',
+        source: 'อ้างอิงทั่วไป — H2SO4 production average',
+        sourceUrl: ''
+      },
+      {
+        category: 'scope3', key: 's3LimeKg',
+        name: 'ปูนขาว', value: 1.0000, unit: 'kgCO2e/กก.',
+        source: 'อ้างอิงทั่วไป — Hydrated lime GWP',
+        sourceUrl: ''
+      },
+      {
+        category: 'scope3', key: 's3ChlorineKg',
+        name: 'คลอรีน', value: 1.0800, unit: 'kgCO2e/กก.',
+        source: 'อ้างอิงทั่วไป — Liquid chlorine production',
+        sourceUrl: ''
+      },
       // ─── Reduction ────────────────────────────────────────────────
       {
         category: 'reduction', key: 'compostFoodWaste',
@@ -396,10 +442,10 @@ export class EmissionFactorRepository {
         update: {
           category: factor.category,
           name: factor.name,
-          value: factor.value,
           unit: factor.unit,
           source: (factor as any).source ?? null,
           sourceUrl: (factor as any).sourceUrl ?? null
+          // ห้ามอัปเดต value กลับไปเป็นค่าเริ่มต้น เพื่อป้องกันการรีเซ็ตค่าที่ผู้ใช้แก้ไขไปแล้ว
         },
         create: {
           year,

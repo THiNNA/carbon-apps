@@ -207,6 +207,7 @@ export const EmissionFactorFormModal: React.FC<EmissionFactorFormModalProps> = (
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emission-factors-groups'] });
       queryClient.invalidateQueries({ queryKey: ['emission-factors-list'] });
+      queryClient.invalidateQueries({ queryKey: ['emission-factors-detail'] });
       showToast(isCreate ? 'สร้างสูตรคำนวณรายปีสำเร็จ' : 'บันทึกการแก้ไขสำเร็จ', 'success');
       onClose();
     },
