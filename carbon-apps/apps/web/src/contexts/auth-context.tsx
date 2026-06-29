@@ -64,6 +64,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
   }, []);
 
+  // Listen สำหรับกรณี token ถูก refresh โดย interceptor
+  // เพื่อให้ payload (departmentId, organizationId) sync กับ JWT ใหม่เสมอ
+  useEffect(() => {
+    const handleTokenRefreshed = (e: CustomEvent) => {
+      try {
+        const { accessToken } = e.detail;
+        const decoded = jwtDecode<TokenPayload>(accessToken);
+        setPayload(decoded);
+      } catch (err) {
+        console.error('Failed to decode refreshed token:', err);
+      }
+    };
+
+    window.addEventListener('auth:token-refreshed', handleTokenRefreshed as EventListener);
+    return () => {
+      window.removeEventListener('auth:token-refreshed', handleTokenRefreshed as EventListener);
+    };
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{

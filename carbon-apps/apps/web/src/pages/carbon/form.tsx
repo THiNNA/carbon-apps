@@ -209,14 +209,24 @@ export const CarbonRecordForm: React.FC = () => {
   const [formOrgId, setFormOrgId] = useState('');
   const [confirmSave, setConfirmSave] = useState(false);
 
+  // Fetch profile จาก DB เพื่อให้ได้ departmentId ล่าสุด (ไม่ใช้ JWT stale)
+  const { data: profile } = useQuery<{ departmentId?: string | null; department?: { name: string } | null }>({
+    queryKey: ['auth-profile-for-form'],
+    queryFn: async () => { const res: any = await api.get('/auth/profile'); return res.data; },
+    enabled: !isSuperAdmin && !isAdmin, // เฉพาะ Regular User
+    staleTime: 60 * 1000, // cache 1 นาที
+  });
+
   useEffect(() => {
     if (!isEditMode && payload) {
       setFormOrgId(isSuperAdmin ? '' : (payload.organizationId || ''));
       if (!isSuperAdmin && !isAdmin) {
-        setFormData(prev => ({ ...prev, departmentId: payload.departmentId || '' }));
+        // ใช้ departmentId จาก profile (DB) ถ้ามี, fallback ไป payload.departmentId
+        const deptId = profile?.departmentId || payload.departmentId || '';
+        setFormData(prev => ({ ...prev, departmentId: deptId }));
       }
     }
-  }, [isEditMode, payload, isSuperAdmin, isAdmin]);
+  }, [isEditMode, payload, isSuperAdmin, isAdmin, profile]);
 
   const [alertDialog, setAlertDialog] = useState<{
     isOpen: boolean;
@@ -346,10 +356,10 @@ export const CarbonRecordForm: React.FC = () => {
     // Convert BE → CE before sending to API
     const body = { ...formData };
 
-    // Regular User: force departmentId = payload.departmentId เสมอ
-    // ป้องกันกรณี dropdown โหลดค่าผิด หรือ payload ไม่ sync กับ formData
-    if (!isSuperAdmin && !isAdmin && payload?.departmentId) {
-      body.departmentId = payload.departmentId;
+    // Regular User: ใช้ departmentId จาก DB (profile query) ถ้ามี เพื่อป้องกัน JWT stale
+    if (!isSuperAdmin && !isAdmin) {
+      const latestDeptId = profile?.departmentId || payload?.departmentId;
+      if (latestDeptId) body.departmentId = latestDeptId;
     }
 
     if (isEditMode) {
@@ -444,7 +454,7 @@ export const CarbonRecordForm: React.FC = () => {
                         <input
                           type="text"
                           readOnly
-                          value={user?.department?.name ?? (payload?.departmentId ? 'กำลังโหลด...' : 'ไม่ระบุหน่วยงาน')}
+                          value={profile?.department?.name ?? user?.department?.name ?? (payload?.departmentId ? 'กำลังโหลด...' : 'ไม่ระบุหน่วยงาน')}
                           className={`${ic} bg-slate-50 text-slate-500 cursor-not-allowed`}
                         />
                       ) : (

@@ -85,6 +85,9 @@ api.interceptors.response.use(
         api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
+        // แจ้ง auth context ให้ decode JWT ใหม่ เพื่ออัปเดต departmentId/organizationId ใน payload
+        window.dispatchEvent(new CustomEvent('auth:token-refreshed', { detail: { accessToken } }));
+
         processQueue(null, accessToken);
         isRefreshing = false;
 
