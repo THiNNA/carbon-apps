@@ -200,7 +200,7 @@ export const CarbonRecordForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { payload } = useAuth();
+  const { payload, user } = useAuth();
   const isSuperAdmin = payload?.roles.includes('SuperAdmin') || false;
   const isAdmin = payload?.roles.includes('Admin') || false;
   const isEditMode = !!id;
@@ -439,16 +439,27 @@ export const CarbonRecordForm: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 mb-1">หน่วยงาน <span className="text-rose-500">*</span></label>
-                      <select 
-                        required 
-                        value={f.departmentId} 
-                        onChange={e => sf({ ...f, departmentId: e.target.value })} 
-                        className={`${ic} disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed`} 
-                        disabled={isEditMode || (!isSuperAdmin && !isAdmin) || (isSuperAdmin && !formOrgId)}
-                      >
-                        <option value="">-- เลือกหน่วยงาน --</option>
-                        {formDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                      </select>
+                      {(!isSuperAdmin && !isAdmin) ? (
+                        // Regular User: แสดงชื่อหน่วยงานจาก user.department.name โดยตรง (read-only)
+                        <input
+                          type="text"
+                          readOnly
+                          value={user?.department?.name ?? (payload?.departmentId ? 'กำลังโหลด...' : 'ไม่ระบุหน่วยงาน')}
+                          className={`${ic} bg-slate-50 text-slate-500 cursor-not-allowed`}
+                        />
+                      ) : (
+                        // SuperAdmin หรือ Admin: dropdown เลือกได้
+                        <select
+                          required
+                          value={f.departmentId}
+                          onChange={e => sf({ ...f, departmentId: e.target.value })}
+                          className={`${ic} disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed`}
+                          disabled={isEditMode || (isSuperAdmin && !formOrgId)}
+                        >
+                          <option value="">-- เลือกหน่วยงาน --</option>
+                          {formDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
