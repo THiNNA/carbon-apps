@@ -46,7 +46,7 @@ async function main() {
   for (const perm of permissionsData) {
     const createdPerm = await prisma.permission.upsert({
       where: { name: perm.name },
-      update: { description: perm.description },
+      update: {},
       create: { name: perm.name, description: perm.description, createdBy: 'SYSTEM' }
     });
     permissions.push(createdPerm);
@@ -115,12 +115,7 @@ async function main() {
   // 4. Create Organization & Departments
   const org = await prisma.organization.upsert({
     where: { code: 'ORG001' },
-    update: {
-      name: 'สำนักงานสาธารณสุขอุดรธานี',
-      description: 'สำนักงานสาธารณสุขจังหวัดอุดรธานี',
-      address: 'ถนนอุดร-หนองคาย ตำบลหมากแข้ง อำเภอเมืองอุดรธานี จังหวัดอุดรธานี 41000',
-      phone: '042-222-718',
-    },
+    update: {},
     create: {
       code: 'ORG001',
       name: 'สำนักงานสาธารณสุขอุดรธานี',
@@ -134,11 +129,7 @@ async function main() {
   // 4.1 Create System Organization (for global system defaults - SuperAdmin only)
   const systemOrg = await prisma.organization.upsert({
     where: { code: 'SYSTEM' },
-    update: {
-      name: 'ค่ามาตรฐานระบบ (System Defaults)',
-      description: 'ค่าสัมประสิทธิ์การปล่อยก๊าซเรือนกระจกแบบมาตรฐานกลางของระบบ — แก้ไขได้เฉพาะ SuperAdmin',
-      isSystem: true,
-    },
+    update: {},
     create: {
       code: 'SYSTEM',
       name: 'ค่ามาตรฐานระบบ (System Defaults)',
@@ -173,7 +164,7 @@ async function main() {
   for (const dept of departmentsData) {
     const created = await prisma.department.upsert({
       where: { code_organizationId: { code: dept.code, organizationId: org.id } },
-      update: { name: dept.name },
+      update: {},
       create: { code: dept.code, name: dept.name, organizationId: org.id, createdBy: 'SYSTEM' }
     });
     deptMap[dept.code] = created;
@@ -200,7 +191,7 @@ async function main() {
   // Admin — assigned to กลุ่มงานสุขภาพดิจิทัล (org-scoped)
   const normalAdmin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: { departmentId: deptMap['DIG'].id },
+    update: {},
     create: {
       email: 'admin@example.com',
       password: hashedPassword,
@@ -214,7 +205,7 @@ async function main() {
   // User — assigned to กลุ่มงานบริหารทั่วไป (department-scoped)
   const standardUser = await prisma.user.upsert({
     where: { email: 'user@example.com' },
-    update: { departmentId: deptMap['ADM'].id },
+    update: {},
     create: {
       email: 'user@example.com',
       password: hashedPassword,
@@ -277,12 +268,7 @@ async function main() {
             organizationId: org.id
           }
         },
-        update: {
-          category: factor.category,
-          name: factor.name,
-          value: factor.value,
-          unit: factor.unit
-        },
+        update: {},
         create: {
           year,
           category: factor.category,
@@ -309,12 +295,7 @@ async function main() {
             organizationId: systemOrg.id
           }
         },
-        update: {
-          category: factor.category,
-          name: factor.name,
-          value: factor.value,
-          unit: factor.unit
-        },
+        update: {},
         create: {
           year,
           category: factor.category,
