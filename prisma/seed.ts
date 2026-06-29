@@ -58,17 +58,32 @@ async function main() {
     superAdmin: await prisma.role.upsert({
       where: { name: 'SuperAdmin' },
       update: {},
-      create: { name: 'SuperAdmin', description: 'Super Administrator with full access', createdBy: 'SYSTEM' }
+      create: {
+        id: 'dd293fa7-a242-4590-bc8f-f13750240a0f',
+        name: 'SuperAdmin',
+        description: 'Super Administrator with full access',
+        createdBy: 'SYSTEM'
+      }
     }),
     admin: await prisma.role.upsert({
       where: { name: 'Admin' },
       update: {},
-      create: { name: 'Admin', description: 'Administrator with org-scoped access', createdBy: 'SYSTEM' }
+      create: {
+        id: 'cca62d9a-8d89-43d1-bffc-e6055a33d6e5',
+        name: 'Admin',
+        description: 'Administrator with org-scoped access',
+        createdBy: 'SYSTEM'
+      }
     }),
     user: await prisma.role.upsert({
       where: { name: 'User' },
       update: {},
-      create: { name: 'User', description: 'Regular staff user with department-scoped access', createdBy: 'SYSTEM' }
+      create: {
+        id: '3dc6b7c7-77ed-4e89-a955-86e8990c7964',
+        name: 'User',
+        description: 'Regular staff user with department-scoped access',
+        createdBy: 'SYSTEM'
+      }
     })
   };
   console.log('✅ Created/verified SuperAdmin, Admin, and User roles.');
@@ -162,56 +177,96 @@ async function main() {
 
   const deptMap: Record<string, any> = {};
   for (const dept of departmentsData) {
+    const customId = dept.code === 'DIG' ? '2ab71a9a-f0d9-4b06-86ae-c5677610b070' : undefined;
     const created = await prisma.department.upsert({
       where: { code_organizationId: { code: dept.code, organizationId: org.id } },
       update: {},
-      create: { code: dept.code, name: dept.name, organizationId: org.id, createdBy: 'SYSTEM' }
+      create: {
+        id: customId,
+        code: dept.code,
+        name: dept.name,
+        organizationId: org.id,
+        createdBy: 'SYSTEM'
+      }
     });
     deptMap[dept.code] = created;
   }
   console.log(`✅ Created/verified organization "${org.name}" with ${departmentsData.length} departments.`);
 
   // 5. Create Default Users
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash('admin123', salt);
+  const customPasswordHash = '$2a$10$3FrtBPzOdGfaJFcHHM2qnOEXtkyA1KZ4R0DMXiukJ2mc/iQzPfY/u';
 
-  // SuperAdmin — no department restriction
+  // ล้างบัญชีผู้ใช้เก่าที่มีอีเมลซ้ำแต่ ID ไม่ตรงกับข้อมูลใหม่ เพื่อป้องกัน Unique constraint error
+  await prisma.user.deleteMany({
+    where: {
+      email: { in: ['superadmin@example.com', 'admin@example.com', 'user@example.com'] },
+      id: { notIn: [
+        'ce2e3057-ab81-41f5-8fec-f84f996eea64',
+        '337199b5-4078-45b1-a1a1-f6ef1b59c2db',
+        '01212249-01dd-4ad8-9f61-4525b04a4d41'
+      ]}
+    }
+  });
+
+  // SuperAdmin — ce2e3057-ab81-41f5-8fec-f84f996eea64
   const superUser = await prisma.user.upsert({
-    where: { email: 'superadmin@example.com' },
-    update: {},
-    create: {
+    where: { id: 'ce2e3057-ab81-41f5-8fec-f84f996eea64' },
+    update: {
       email: 'superadmin@example.com',
-      password: hashedPassword,
+      password: customPasswordHash,
       name: 'System SuperAdmin',
       roleId: roles.superAdmin.id,
+      departmentId: null
+    },
+    create: {
+      id: 'ce2e3057-ab81-41f5-8fec-f84f996eea64',
+      email: 'superadmin@example.com',
+      password: customPasswordHash,
+      name: 'System SuperAdmin',
+      roleId: roles.superAdmin.id,
+      departmentId: null,
       createdBy: 'SYSTEM'
     }
   });
 
-  // Admin — assigned to กลุ่มงานสุขภาพดิจิทัล (org-scoped)
+  // Admin — 337199b5-4078-45b1-a1a1-f6ef1b59c2db
   const normalAdmin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
-    create: {
+    where: { id: '337199b5-4078-45b1-a1a1-f6ef1b59c2db' },
+    update: {
       email: 'admin@example.com',
-      password: hashedPassword,
-      name: 'IT Admin',
+      password: customPasswordHash,
+      name: 'Org Admin',
+      roleId: roles.admin.id,
+      departmentId: deptMap['DIG'].id
+    },
+    create: {
+      id: '337199b5-4078-45b1-a1a1-f6ef1b59c2db',
+      email: 'admin@example.com',
+      password: customPasswordHash,
+      name: 'Org Admin',
       roleId: roles.admin.id,
       departmentId: deptMap['DIG'].id,
       createdBy: 'SYSTEM'
     }
   });
 
-  // User — assigned to กลุ่มงานบริหารทั่วไป (department-scoped)
+  // User — 01212249-01dd-4ad8-9f61-4525b04a4d41
   const standardUser = await prisma.user.upsert({
-    where: { email: 'user@example.com' },
-    update: {},
-    create: {
+    where: { id: '01212249-01dd-4ad8-9f61-4525b04a4d41' },
+    update: {
       email: 'user@example.com',
-      password: hashedPassword,
-      name: 'HR Staff',
+      password: customPasswordHash,
+      name: 'User Staff',
       roleId: roles.user.id,
-      departmentId: deptMap['ADM'].id,
+      departmentId: deptMap['DIG'].id
+    },
+    create: {
+      id: '01212249-01dd-4ad8-9f61-4525b04a4d41',
+      email: 'user@example.com',
+      password: customPasswordHash,
+      name: 'User Staff',
+      roleId: roles.user.id,
+      departmentId: deptMap['DIG'].id,
       createdBy: 'SYSTEM'
     }
   });
