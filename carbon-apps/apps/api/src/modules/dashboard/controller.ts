@@ -15,6 +15,18 @@ export class DashboardController {
     );
   }
 
+  async getAvailableYears(request: FastifyRequest, reply: FastifyReply) {
+    const user = request.user;
+    if (!user) throw new BadRequestError('User not authenticated');
+    const query = request.query as any;
+    const organizationId = query.organizationId || undefined;
+    const departmentId = query.departmentId || undefined;
+    const years = await dashboardService.getAvailableYears(user, { organizationId, departmentId });
+    return reply.send(
+      buildApiResponse({ success: true, message: 'Available years retrieved', data: years })
+    );
+  }
+
   async getCarbonStats(request: FastifyRequest, reply: FastifyReply) {
     const user = request.user;
     if (!user) throw new BadRequestError('User not authenticated');

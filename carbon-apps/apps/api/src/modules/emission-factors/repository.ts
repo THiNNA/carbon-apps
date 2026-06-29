@@ -2,10 +2,50 @@ import { prisma } from '../../common/database/prisma.js';
 import { CreateEmissionFactorDto } from '@enterprise/shared-types';
 
 export class EmissionFactorRepository {
-  async list(year?: number) {
+  async listGroups() {
+    const groups = await prisma.emissionFactor.groupBy({
+      by: ['year', 'organizationId'],
+      _count: {
+        id: true
+      },
+      _max: {
+        updatedAt: true
+      }
+    });
+
+    const result = [];
+    for (const g of groups) {
+      const org = await prisma.organization.findUnique({
+        where: { id: g.organizationId }
+      });
+      result.push({
+        year: g.year,
+        organizationId: g.organizationId,
+        organizationName: org ? org.name : 'Unknown Organization',
+        organizationCode: org ? org.code : 'UNKNOWN',
+        isSystem: org ? org.isSystem : false,
+        count: g._count.id,
+        updatedAt: g._max.updatedAt
+      });
+    }
+
+    return result.sort((a, b) => b.year - a.year || a.organizationName.localeCompare(b.organizationName));
+  }
+
+  async getSystemOrgId(): Promise<string | null> {
+    const systemOrg = await prisma.organization.findFirst({
+      where: { code: 'SYSTEM', isSystem: true }
+    });
+    return systemOrg ? systemOrg.id : null;
+  }
+
+  async list(year?: number, organizationId?: string) {
     const where: any = {};
     if (year !== undefined) {
       where.year = year;
+    }
+    if (organizationId !== undefined) {
+      where.organizationId = organizationId;
     }
     return prisma.emissionFactor.findMany({
       where,
@@ -13,9 +53,9 @@ export class EmissionFactorRepository {
     });
   }
 
-  async findByYearAndKey(year: number, key: string) {
+  async findByYearAndKey(year: number, key: string, organizationId: string) {
     return prisma.emissionFactor.findFirst({
-      where: { year, key }
+      where: { year, key, organizationId }
     });
   }
 
@@ -32,11 +72,11 @@ export class EmissionFactorRepository {
     });
   }
 
-  async bulkUpdate(year: number, factors: Array<{ key: string; value: number }>, userId?: string) {
+  async bulkUpdate(year: number, organizationId: string, factors: Array<{ key: string; value: number }>, userId?: string) {
     return prisma.$transaction(
       factors.map(f =>
         prisma.emissionFactor.updateMany({
-          where: { year, key: f.key },
+          where: { year, key: f.key, organizationId },
           data: {
             value: f.value,
             updatedBy: userId
@@ -46,38 +86,49 @@ export class EmissionFactorRepository {
     );
   }
 
-  async clone(fromYear: number, toYear: number, userId?: string) {
-    // 1. Fetch factors from source year
+  async clone(fromYear: number, fromOrgId: string, toYear: number, toOrgId: string, userId?: string) {
+    // 1. Fetch factors from source year & org
     const sourceFactors = await prisma.emissionFactor.findMany({
-      where: { year: fromYear }
+      where: { year: fromYear, organizationId: fromOrgId }
     });
 
     if (sourceFactors.length === 0) {
-      throw new Error(`ไม่พบข้อมูลตั้งค่าสูตรคำนวณของปีฐาน ${fromYear + 543}`);
+      throw new Error(`ไม่พบข้อมูลตั้งค่าสูตรคำนวณของปีฐานและองค์กรที่ระบุ`);
     }
 
-    // 2. Insert/Upsert into target year
+    // 2. Insert/Upsert into target year & org
     const operations = sourceFactors.map(sf => {
       const data = {
         category: sf.category,
         name: sf.name,
         value: sf.value,
         unit: sf.unit,
+        source: sf.source,
+        sourceUrl: sf.sourceUrl,
         createdBy: userId
       };
 
       return prisma.emissionFactor.upsert({
-        where: { year_key: { year: toYear, key: sf.key } },
+        where: {
+          year_key_organizationId: {
+            year: toYear,
+            key: sf.key,
+            organizationId: toOrgId
+          }
+        },
         update: {
           category: sf.category,
           name: sf.name,
           value: sf.value,
           unit: sf.unit,
+          source: sf.source,
+          sourceUrl: sf.sourceUrl,
           updatedBy: userId
         },
         create: {
           year: toYear,
           key: sf.key,
+          organizationId: toOrgId,
           ...data
         }
       });
@@ -86,14 +137,22 @@ export class EmissionFactorRepository {
     return prisma.$transaction(operations);
   }
 
-  async create(data: CreateEmissionFactorDto, userId?: string) {
+  async create(data: CreateEmissionFactorDto & { organizationId: string }, userId?: string) {
     return prisma.emissionFactor.upsert({
-      where: { year_key: { year: data.year, key: data.key } },
+      where: {
+        year_key_organizationId: {
+          year: data.year,
+          key: data.key,
+          organizationId: data.organizationId
+        }
+      },
       update: {
         category: data.category,
         name: data.name,
         value: data.value,
         unit: data.unit,
+        source: data.source,
+        sourceUrl: data.sourceUrl,
         updatedBy: userId
       },
       create: {
@@ -103,12 +162,15 @@ export class EmissionFactorRepository {
         name: data.name,
         value: data.value,
         unit: data.unit,
+        organizationId: data.organizationId,
+        source: data.source,
+        sourceUrl: data.sourceUrl,
         createdBy: userId
       }
     });
   }
 
-  async initialize(year: number, userId?: string) {
+  async initialize(year: number, organizationId: string, userId?: string) {
     const defaultFactors = [
       // ─── Scope 1: Stationary Combustion ─────────────────────────────
       {
@@ -324,7 +386,13 @@ export class EmissionFactorRepository {
 
     const operations = defaultFactors.map(factor =>
       prisma.emissionFactor.upsert({
-        where: { year_key: { year, key: factor.key } },
+        where: {
+          year_key_organizationId: {
+            year,
+            key: factor.key,
+            organizationId
+          }
+        },
         update: {
           category: factor.category,
           name: factor.name,
@@ -340,6 +408,7 @@ export class EmissionFactorRepository {
           name: factor.name,
           value: factor.value,
           unit: factor.unit,
+          organizationId,
           source: (factor as any).source ?? null,
           sourceUrl: (factor as any).sourceUrl ?? null,
           createdBy: userId
@@ -350,12 +419,11 @@ export class EmissionFactorRepository {
     return prisma.$transaction(operations);
   }
 
-  async deleteByYear(year: number, userId?: string) {
+  async deleteByYearAndOrg(year: number, organizationId: string, userId?: string) {
     return prisma.emissionFactor.deleteMany({
-      where: { year }
+      where: { year, organizationId }
     });
   }
 }
 
 export const emissionFactorRepository = new EmissionFactorRepository();
-

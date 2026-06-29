@@ -127,7 +127,7 @@ export const CarbonRecordViewModal: React.FC<CarbonRecordViewModalProps> = ({ is
                         <div>
                           <div className="text-xs text-slate-400 font-semibold uppercase">ช่วงเวลากลุ่มข้อมูล</div>
                           <div className="text-sm font-bold text-slate-800 mt-0.5">
-                            {MONTH_NAMES_TH[record.month]} {record.year}
+                            {MONTH_NAMES_TH[record.month]} {record.year + 543}
                           </div>
                         </div>
                       </div>

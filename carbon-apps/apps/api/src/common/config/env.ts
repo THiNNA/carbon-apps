@@ -10,7 +10,8 @@ export const config = {
   DATABASE_URL: process.env.DATABASE_URL || '',
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET || 'super-secret-access-token-key-change-in-production-12345!',
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'super-secret-refresh-token-key-change-in-production-12345!',
-  NODE_ENV: process.env.NODE_ENV || 'development'
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
 };
 
 if (!config.DATABASE_URL) {

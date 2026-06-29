@@ -43,7 +43,6 @@ export const DashboardLayout: React.FC = () => {
   const adminItems = [
     { label: 'จัดการบทบาท', path: '/roles', icon: <Shield size={18} className="text-indigo-400" />, show: payload?.roles.includes('SuperAdmin') },
     { label: 'สิทธิ์การใช้งาน', path: '/permissions', icon: <Key size={18} className="text-amber-400" />, show: payload?.roles.includes('SuperAdmin') },
-    { label: 'ตั้งค่าสัมประสิทธิ์คาร์บอน (EF)', path: '/settings/emission-factors', icon: <Settings2 size={18} className="text-emerald-400" />, show: payload?.roles.includes('SuperAdmin') ?? false }
   ];
 
   const orgItems = [
@@ -53,7 +52,8 @@ export const DashboardLayout: React.FC = () => {
   ];
 
   const carbonItems = [
-    { label: 'บันทึกข้อมูลคาร์บอน', path: '/carbon', icon: <DatabaseZap size={18} className="text-emerald-400" />, show: hasPermission('carbon-records:read') }
+    { label: 'บันทึกข้อมูลคาร์บอน', path: '/carbon', icon: <DatabaseZap size={18} className="text-emerald-400" />, show: hasPermission('carbon-records:read') },
+    { label: 'ตั้งค่าสัมประสิทธิ์คาร์บอน (EF)', path: '/emission-factors', icon: <Settings2 size={18} className="text-emerald-400" />, show: payload?.roles.includes('SuperAdmin') || payload?.roles.includes('Admin') }
   ];
 
   const showAdminMenu = adminItems.some((item) => item.show);
@@ -178,11 +178,13 @@ export const DashboardLayout: React.FC = () => {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
               <p className="text-xs text-slate-500 truncate">{payload?.roles.join(', ')}</p>
-              {user?.department && (
+              {/* {user?.department && (
                 <p className="text-[10px] text-slate-400 truncate mt-0.5" title={`${user.department.organization?.name || ''} / ${user.department.name}`}>
-                  {user.department.organization?.name || ''} - {user.department.name}
+                  {user.department.organization?.name || ''}
+                  <br />
+                  - {user.department.name}
                 </p>
-              )}
+              )} */}
             </div>
           </div>
           <button
@@ -207,12 +209,11 @@ export const DashboardLayout: React.FC = () => {
               <Menu size={20} />
             </button>
             <div className="flex flex-col">
-              <h1 className="font-bold text-slate-800 text-base md:text-lg leading-tight">แผงควบคุมหลัก</h1>
-              {user?.department && (
-                <span className="text-[11px] md:text-xs text-slate-500 font-medium block leading-normal">
-                  {user.department.organization?.name} • {user.department.name}
-                </span>
-              )}
+              <h1 className="font-bold text-slate-800 text-base md:text-lg leading-tight">
+                {user?.department && (
+                  `${user.department.organization?.name} • ${user.department.name}`
+                )}
+              </h1>
             </div>
           </div>
 

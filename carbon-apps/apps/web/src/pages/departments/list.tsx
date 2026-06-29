@@ -7,8 +7,9 @@ import type { Column } from '../../components/data-table.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import type { DepartmentDto, OrganizationDto } from '@enterprise/shared-types';
 import { Plus, Pencil, Trash2, Layers, Search } from 'lucide-react';
-import { formatDate } from '../../services/date.js';
 import { useAuth } from '../../contexts/auth-context.js';
+import { Select2 } from '../../components/select2.js';
+
 
 export const DepartmentList: React.FC = () => {
   const queryClient = useQueryClient();
@@ -57,7 +58,8 @@ export const DepartmentList: React.FC = () => {
       const response: any = await api.get('/organizations', { params: { limit: 100 } });
       return response.data;
     },
-    enabled: isSuperAdmin
+    enabled: isSuperAdmin,
+    staleTime: 5 * 60 * 1000,  // P2-B: orgs เปลี่ยนน้อย cache 5 นาที
   });
 
   // Fetch admin's own org name for read-only display
@@ -142,7 +144,22 @@ export const DepartmentList: React.FC = () => {
         </span>
       )
     },
-    { key: 'createdAt', header: 'วันที่สร้าง', sortable: true, render: (row) => formatDate(row.createdAt) },
+    {
+      key: 'createdAt', header: 'วันที่สร้าง',
+      sortable: true,
+      align: 'center',
+      render: (row: any) => (
+        <span className="text-xs text-slate-500 font-mono">
+          {new Date(row.createdAt).toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+      )
+    },
     {
       key: 'actions' as any,
       header: 'จัดการ',
@@ -169,18 +186,24 @@ export const DepartmentList: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <div className="flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-405" />
             <input type="text" placeholder="ค้นหาหน่วยงาน..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
           {isSuperAdmin && (
-            <select value={filterOrgId} onChange={(e) => { setFilterOrgId(e.target.value); setPage(1); }}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-              <option value="">ทุกองค์กร</option>
-              {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-            </select>
+            <div className="flex-1">
+              <Select2
+                value={filterOrgId}
+                onChange={(val) => { setFilterOrgId(val); setPage(1); }}
+                placeholder="ทุกองค์กร"
+                options={[
+                  { value: '', label: 'ทุกองค์กร' },
+                  ...(orgsData || []).map((org) => ({ value: org.id, label: org.name }))
+                ]}
+              />
+            </div>
           )}
         </div>
 
@@ -213,22 +236,23 @@ export const DepartmentList: React.FC = () => {
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">สังกัดองค์กร *</label>
                 {isSuperAdmin ? (
-                  <select value={formData.organizationId} onChange={(e) => setFormData(p => ({ ...p, organizationId: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
-                    <option value="">-- เลือกองค์กร --</option>
-                    {(orgsData || []).map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
-                  </select>
+                  <Select2
+                    value={formData.organizationId}
+                    onChange={(val) => setFormData(p => ({ ...p, organizationId: val }))}
+                    placeholder="-- เลือกองค์กร --"
+                    options={(orgsData || []).map((org) => ({ value: org.id, label: org.name }))}
+                  />
                 ) : (
                   <input
                     type="text"
                     value={adminOrgName}
                     readOnly
                     disabled
-                    className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed"
+                    className="w-full px-3 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed font-bold"
                   />
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">รหัสหน่วยงาน *</label>
                   <input type="text" value={formData.code} onChange={(e) => setFormData(p => ({ ...p, code: e.target.value }))}

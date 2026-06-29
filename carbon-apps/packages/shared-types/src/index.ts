@@ -351,6 +351,7 @@ export interface CarbonDashboardStatsDto {
 export interface EmissionFactorDto extends AuditFields {
   id: string;
   year: number;
+  organizationId: string;
   category: string;
   key: string;
   name: string;
@@ -362,6 +363,7 @@ export interface EmissionFactorDto extends AuditFields {
 
 export interface CreateEmissionFactorDto {
   year: number;
+  organizationId: string;
   category: string;
   key: string;
   name: string;

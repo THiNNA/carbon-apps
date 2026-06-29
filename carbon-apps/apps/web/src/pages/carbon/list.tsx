@@ -7,26 +7,27 @@ import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { DataTable } from '../../components/data-table.js';
 import type { Column } from '../../components/data-table.js';
 import type { CarbonRecordDto, DepartmentDto, OrganizationDto } from '@enterprise/shared-types';
-import { Plus, Pencil, Eye, Trash2, Leaf } from 'lucide-react';
+import { Plus, Pencil, Eye, Trash2, Leaf, FileSpreadsheet } from 'lucide-react';
 import { CarbonRecordViewModal } from './view-modal.js';
+import { CarbonReportModal } from './report-modal.js';
 import { useAuth } from '../../contexts/auth-context.js';
+import { Select2 } from '../../components/select2.js';
+
 
 const MONTH_NAMES_TH = [
   '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
   'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
 ];
 
-const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
-const CURRENT_THAI_YEAR = new Date().getFullYear() + 543;
-const THAI_YEAR_OPTIONS = Array.from(
-  { length: CURRENT_THAI_YEAR - SYSTEM_START_YEAR + 1 },
-  (_, i) => CURRENT_THAI_YEAR - i
-); // [current, ..., 2565]
+const SYSTEM_START_YEAR = 2024; // ปีที่เริ่มเก็บข้อมูล ค.ศ. (ตรงกับ พ.ศ. 2567)
+const CURRENT_CE_YEAR = new Date().getFullYear();
+const CE_YEAR_OPTIONS = Array.from(
+  { length: Math.max(3, CURRENT_CE_YEAR - SYSTEM_START_YEAR + 1) },
+  (_, i) => Math.max(CURRENT_CE_YEAR, 2026) - i
+); // รับประกันมีอย่างน้อย 3 ปีเสมอ (2026, 2025, 2024) ป้องกัน array ว่าง
 
 const fmt = (v: number | undefined | null) => (v ?? 0).toFixed(2);
 
-// Style helper for filters
-const ic = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400';
 
 export const CarbonRecordList: React.FC = () => {
   const navigate = useNavigate();
@@ -37,10 +38,10 @@ export const CarbonRecordList: React.FC = () => {
   const isAdmin = payload?.roles.includes('Admin') || false;
 
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit] = useState(12);
   const [sortBy, setSortBy] = useState('year');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [filterYear, setFilterYear] = useState<number | ''>(CURRENT_THAI_YEAR); // stored as พ.ศ.
+  const [filterYear, setFilterYear] = useState<number | ''>(CURRENT_CE_YEAR); // stored as ค.ศ.
   const [filterMonth, setFilterMonth] = useState<number | ''>('');
   const [filterOrgId, setFilterOrgId] = useState('');
   const [filterDeptId, setFilterDeptId] = useState('');
@@ -55,6 +56,7 @@ export const CarbonRecordList: React.FC = () => {
 
   const [confirmDelete, setConfirmDelete] = useState<CarbonRecordDto | null>(null);
   const [viewRecordId, setViewRecordId] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const handleSort = (key: string, order: 'asc' | 'desc') => {
     setSortBy(key);
@@ -68,8 +70,7 @@ export const CarbonRecordList: React.FC = () => {
       const res: any = await api.get('/carbon-records', {
         params: {
           page, limit,
-          // convert พ.ศ. → ค.ศ. for API (or pass as-is if empty)
-          year: filterYear ? filterYear - 543 : undefined,
+          year: filterYear || undefined, // ส่ง ค.ศ. ไปยัง API ตรงๆ
           month: filterMonth || undefined,
           organizationId: filterOrgId || undefined, departmentId: filterDeptId || undefined,
           status: filterStatus || undefined,
@@ -82,12 +83,16 @@ export const CarbonRecordList: React.FC = () => {
 
   const { data: orgs } = useQuery<OrganizationDto[]>({
     queryKey: ['organizations-all'],
-    queryFn: async () => { const res: any = await api.get('/organizations', { params: { limit: 100 } }); return res.data; }
+    queryFn: async () => { const res: any = await api.get('/organizations', { params: { limit: 100 } }); return res.data; },
+    enabled: isSuperAdmin,              // P2-A: ยิง API เฉพาะ SuperAdmin เท่านั้น
+    staleTime: 5 * 60 * 1000,          // P2-B: cache 5 นาที ไม่ refetch บ่อย
   });
 
   const { data: filterDepts } = useQuery<DepartmentDto[]>({
     queryKey: ['departments-all', filterOrgId],
-    queryFn: async () => { const res: any = await api.get('/departments/all', { params: { organizationId: filterOrgId || undefined } }); return res.data; }
+    queryFn: async () => { const res: any = await api.get('/departments/all', { params: { organizationId: filterOrgId || undefined } }); return res.data; },
+    enabled: isSuperAdmin ? !!filterOrgId : isAdmin, // P2-A: SuperAdmin ต้องเลือก org ก่อน
+    staleTime: 5 * 60 * 1000,          // P2-B: cache 5 นาที
   });
 
   const deleteMutation = useMutation({
@@ -116,11 +121,11 @@ export const CarbonRecordList: React.FC = () => {
       key: 'year',
       header: 'ปี / เดือน',
       sortable: true,
-      align: 'center',
+      align: 'left',
       render: (row) => (
         <div>
           <span className="font-medium text-slate-700">{MONTH_NAMES_TH[row.month]}</span>
-          <div className="text-xs text-slate-400">{row.year}</div>
+          <div className="text-xs text-slate-400">{row.year + 543}</div>
         </div>
       )
     },
@@ -167,6 +172,23 @@ export const CarbonRecordList: React.FC = () => {
       render: (row) => <span className="font-mono font-bold text-slate-800">{fmt(row.netCo2e)}</span>
     },
     {
+      key: 'updatedAt',
+      header: 'วันที่แก้ไขล่าสุด',
+      sortable: true,
+      align: 'center',
+      render: (row) => (
+        <span className="text-xs text-slate-500 font-mono">
+          {new Date(row.updatedAt).toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+      )
+    },
+    {
       key: 'actions',
       header: 'จัดการ',
       align: 'center',
@@ -198,46 +220,78 @@ export const CarbonRecordList: React.FC = () => {
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">บันทึกข้อมูลการปล่อยก๊าซเรือนกระจกของแต่ละหน่วยงานรายเดือน (ขอบเขตที่ 1-3)</p>
         </div>
-        <button onClick={() => navigate('/carbon/create')} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
-          <Plus size={16} /> บันทึกข้อมูล
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg transition-colors shadow-sm"
+          >
+            <FileSpreadsheet className="text-emerald-600" size={16} />
+            รายงาน Excel
+          </button>
+          <button onClick={() => navigate('/carbon/create')} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm">
+            <Plus size={16} /> บันทึกข้อมูล
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
           {isSuperAdmin && (
-            <select value={filterOrgId} onChange={e => { setFilterOrgId(e.target.value); setFilterDeptId(''); setPage(1); }} className={ic}>
-              <option value="">ทุกองค์กร</option>
-              {orgs?.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500">องค์กร</label>
+              <Select2
+                value={filterOrgId}
+                onChange={val => { setFilterOrgId(val); setFilterDeptId(''); setPage(1); }}
+                options={[
+                  { value: '', label: 'ทุกองค์กร' },
+                  ...(orgs?.map(o => ({ value: o.id, label: o.name })) ?? [])
+                ]}
+              />
+            </div>
           )}
+
           {(isSuperAdmin || isAdmin) && (
-            <select value={filterDeptId} onChange={e => { setFilterDeptId(e.target.value); setPage(1); }} className={ic}>
-              <option value="">ทุกหน่วยงาน</option>
-              {filterDepts?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-slate-500">หน่วยงาน / กลุ่มงาน</label>
+              <Select2
+                disabled={isSuperAdmin && !filterOrgId}
+                value={filterDeptId}
+                onChange={val => { setFilterDeptId(val); setPage(1); }}
+                options={[
+                  { value: '', label: 'ทุกหน่วยงาน' },
+                  ...(filterOrgId && filterDepts ? filterDepts.map(d => ({ value: d.id, label: d.name })) : [])
+                ]}
+              />
+            </div>
           )}
-          <select value={filterYear} onChange={e => { setFilterYear(e.target.value ? Number(e.target.value) : ''); setPage(1); }} className={ic}>
-            <option value="">ทุกปี</option>
-            {THAI_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={filterMonth} onChange={e => { setFilterMonth(e.target.value ? Number(e.target.value) : ''); setPage(1); }} className={ic}>
-            <option value="">ทุกเดือน</option>
-            {MONTH_NAMES_TH.slice(1).map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
-          </select>
-          {/* <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }} className={ic}>
-            <option value="">ทุกสถานะ</option>
-            <option value="draft">แบบร่าง</option>
-            <option value="submitted">ส่งแล้ว</option>
-            <option value="approved">อนุมัติแล้ว</option>
-          </select> */}
-          {/* <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" checked={showDeleted} onChange={e => { setShowDeleted(e.target.checked); setPage(1); }} className="rounded border-slate-300 text-emerald-600" />
-            แสดงที่ถูกลบ
-          </label> */}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-500">ปีงบประมาณ</label>
+            <Select2
+              value={filterYear ? String(filterYear) : ''}
+              onChange={val => { setFilterYear(val ? Number(val) : ''); setPage(1); }}
+              options={[
+                { value: '', label: 'ทุกปี' },
+                ...CE_YEAR_OPTIONS.map(y => ({ value: String(y), label: `${y + 543}` }))
+              ]}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-slate-500">เดือน</label>
+            <Select2
+              value={filterMonth ? String(filterMonth) : ''}
+              onChange={val => { setFilterMonth(val ? Number(val) : ''); setPage(1); }}
+              options={[
+                { value: '', label: 'ทุกเดือน' },
+                ...MONTH_NAMES_TH.slice(1).map((name, i) => ({ value: String(i + 1), label: name }))
+              ]}
+            />
+          </div>
         </div>
       </div>
+
 
       {/* Table */}
       <DataTable
@@ -256,10 +310,12 @@ export const CarbonRecordList: React.FC = () => {
 
       {/* Confirm Dialogs */}
       <ConfirmDialog isOpen={!!confirmDelete} title="ยืนยันการลบข้อมูล"
-        message={`ต้องการลบข้อมูลคาร์บอนของ "${confirmDelete?.department?.name}" เดือน ${confirmDelete?.month}/${confirmDelete?.year} ใช่หรือไม่? การลบนี้ไม่สามารถกู้คืนได้`}
+        message={`ต้องการลบข้อมูลคาร์บอนของ "${confirmDelete?.department?.name}" เดือน ${confirmDelete?.month}/${confirmDelete?.year ? confirmDelete.year + 543 : ''} ใช่หรือไม่? การลบนี้ไม่สามารถกู้คืนได้`}
         type="danger" onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete.id)} onClose={() => setConfirmDelete(null)} />
 
       <CarbonRecordViewModal isOpen={!!viewRecordId} recordId={viewRecordId} onClose={() => setViewRecordId(null)} />
+      
+      <CarbonReportModal isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} />
     </div>
   );
 };

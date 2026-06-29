@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { AppError } from './common/errors/custom-errors.js';
 import { buildApiResponse } from '@enterprise/shared-utils';
+import { config } from './common/config/env.js';
 
 // Import Routes (will be registered soon)
 import { authRoutes } from './modules/auth/routes.js';
@@ -32,7 +33,7 @@ export function buildApp() {
   // Security Plugins
   app.register(helmet);
   app.register(cors, {
-    origin: '*', // Custom configurations should be set in production
+    origin: config.CORS_ORIGIN,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
   });
@@ -42,12 +43,12 @@ export function buildApp() {
   });
 
   // Global Error Handler
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: any, request, reply) => {
     app.log.error(error);
 
     // If it's a Fastify schema validation error
     if (error.validation) {
-      const errors = error.validation.map((err) => ({
+      const errors = error.validation.map((err: any) => ({
         field: err.instancePath.replace(/^\//, '') || undefined,
         message: err.message || 'Validation failed'
       }));
@@ -81,11 +82,18 @@ export function buildApp() {
     }
 
     // Default Internal Server Error
+    const isProduction = config.NODE_ENV === 'production';
     return reply.status(500).send(
       buildApiResponse({
         success: false,
         message: 'Internal Server Error',
-        errors: [{ message: error.message || 'An unexpected error occurred' }]
+        errors: [
+          {
+            message: isProduction
+              ? 'An unexpected error occurred'
+              : error.message || 'An unexpected error occurred'
+          }
+        ]
       })
     );
   });

@@ -27,6 +27,7 @@ export class OrganizationService {
     search?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    includeSystem?: boolean;
   }) {
     const { items, total } = await organizationRepository.list(params);
     const totalPages = Math.ceil(total / params.limit);

@@ -102,7 +102,7 @@ export const EmissionFactorViewModal: React.FC<EmissionFactorViewModalProps> = (
 
               {/* Details */}
               <div>
-                <InfoRow label="ปีงบประมาณ" value={factor.year} />
+                <InfoRow label="ปีงบประมาณ" value={factor.year + 543} />
                 <InfoRow label="ประเภท" value={CATEGORY_LABELS[factor.category] ?? factor.category} />
                 <div className="flex justify-between py-2.5 border-b border-slate-100 text-sm">
                   <span className="text-slate-500 font-medium">ประเภท Badge</span>

@@ -131,6 +131,25 @@ async function main() {
     }
   });
 
+  // 4.1 Create System Organization (for global system defaults - SuperAdmin only)
+  const systemOrg = await prisma.organization.upsert({
+    where: { code: 'SYSTEM' },
+    update: {
+      name: 'ค่ามาตรฐานระบบ (System Defaults)',
+      description: 'ค่าสัมประสิทธิ์การปล่อยก๊าซเรือนกระจกแบบมาตรฐานกลางของระบบ — แก้ไขได้เฉพาะ SuperAdmin',
+      isSystem: true,
+    },
+    create: {
+      code: 'SYSTEM',
+      name: 'ค่ามาตรฐานระบบ (System Defaults)',
+      description: 'ค่าสัมประสิทธิ์การปล่อยก๊าซเรือนกระจกแบบมาตรฐานกลางของระบบ — แก้ไขได้เฉพาะ SuperAdmin',
+      isSystem: true,
+      createdBy: 'SYSTEM'
+    }
+  });
+  console.log(`✅ Created/verified System Organization: code=SYSTEM (ค่ามาตรฐานระบบ)`);
+
+
   const departmentsData = [
     { code: 'DIG', name: 'กลุ่มงานสุขภาพดิจิทัล' },
     { code: 'CDC', name: 'กลุ่มงานควบคุมโรคติดต่อ' },
@@ -247,10 +266,17 @@ async function main() {
     { category: 'reduction', key: 'treePerYear', name: 'การดูดกลับคาร์บอนของไม้ยืนต้น', value: 3.6700, unit: 'kgCO2e/ต้น/ปี' }
   ];
 
+  // Seed for ORG001 (for 2025 and 2026 only)
   for (const year of [2025, 2026]) {
     for (const factor of defaultFactors) {
       await prisma.emissionFactor.upsert({
-        where: { year_key: { year, key: factor.key } },
+        where: {
+          year_key_organizationId: {
+            year,
+            key: factor.key,
+            organizationId: org.id
+          }
+        },
         update: {
           category: factor.category,
           name: factor.name,
@@ -264,12 +290,46 @@ async function main() {
           name: factor.name,
           value: factor.value,
           unit: factor.unit,
+          organizationId: org.id,
           createdBy: 'SYSTEM'
         }
       });
     }
   }
-  console.log('✅ Created/verified default Emission Factors for 2025 and 2026.');
+  console.log('✅ Created/verified default Emission Factors for ORG001 (2025-2026).');
+
+  // 6.2 Seed SYSTEM org defaults for 3 years: 2024 (2567), 2025 (2568), 2026 (2569)
+  for (const year of [2024, 2025, 2026]) {
+    for (const factor of defaultFactors) {
+      await prisma.emissionFactor.upsert({
+        where: {
+          year_key_organizationId: {
+            year,
+            key: factor.key,
+            organizationId: systemOrg.id
+          }
+        },
+        update: {
+          category: factor.category,
+          name: factor.name,
+          value: factor.value,
+          unit: factor.unit
+        },
+        create: {
+          year,
+          category: factor.category,
+          key: factor.key,
+          name: factor.name,
+          value: factor.value,
+          unit: factor.unit,
+          organizationId: systemOrg.id,
+          createdBy: 'SYSTEM'
+        }
+      });
+    }
+  }
+  console.log('✅ Created/verified System Defaults (SYSTEM org) for 2024 (2567), 2025 (2568), 2026 (2569).');
+
 
   console.log(`✅ Default SuperAdmin: ${superUser.email} (ไม่มีสังกัด — เข้าถึงทุกองค์กร)`);
   console.log(`✅ Default Admin: ${normalAdmin.email} → สังกัด ${deptMap['DIG'].name}`);

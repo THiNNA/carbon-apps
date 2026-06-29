@@ -7,7 +7,6 @@ import type { Column } from '../../components/data-table.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import type { OrganizationDto } from '@enterprise/shared-types';
 import { Plus, Pencil, Trash2, Building2, Search } from 'lucide-react';
-import { formatDate } from '../../services/date.js';
 
 export const OrganizationList: React.FC = () => {
   const queryClient = useQueryClient();
@@ -92,7 +91,21 @@ export const OrganizationList: React.FC = () => {
         </span>
       )
     },
-    { key: 'createdAt', header: 'วันที่สร้าง', sortable: true, render: (row) => formatDate(row.createdAt) },
+    {
+      key: 'createdAt', header: 'วันที่สร้าง',
+      sortable: true,
+      align: 'center', render: (row: any) => (
+        <span className="text-xs text-slate-500 font-mono">
+          {new Date(row.createdAt).toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+      )
+    },
     {
       key: 'actions' as any,
       header: 'จัดการ',
@@ -153,7 +166,7 @@ export const OrganizationList: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-800">{editingOrg ? 'แก้ไของค์กร' : 'เพิ่มองค์กรใหม่'}</h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">รหัสองค์กร *</label>
                   <input type="text" value={formData.code} onChange={(e) => setFormData(p => ({ ...p, code: e.target.value }))}

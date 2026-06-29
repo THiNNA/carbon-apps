@@ -129,28 +129,99 @@ function calculateAll(d: any, ef: any, efRed: any) {
   return { scope1Co2e, scope2Co2e, scope3Co2e, totalCo2e, totalReducedCo2e, netCo2e };
 }
 
-async function loadFactorsForYear(year: number) {
-  const dbFactors = await prisma.emissionFactor.findMany({
-    where: { year }
-  });
+export async function loadFactorsForYearAndOrg(year: number, organizationId?: string) {
+  // ─── รวมเป็น Single DB Call โดยดึงข้อมูลทั้งหมดที่เกี่ยวข้องใน 1 query ─────
+  // แทนที่จะยิง DB 3-5 ครั้ง (waterfall fallback) ให้ดึงพร้อมกันแล้วจัดการ fallback ใน memory
 
-  const ef = { ...EF };
-  const efRed = { ...EF_REDUCTION };
+  // (1) ค้นหา System Org ID (cache ไว้ในโมดูล)
+  const systemOrg = await _getSystemOrg();
 
-  for (const f of dbFactors) {
-    if (f.category === 'reduction') {
-      if (f.key in efRed) {
-        (efRed as any)[f.key] = f.value;
-      }
-    } else {
-      if (f.key in ef) {
-        (ef as any)[f.key] = f.value;
-      }
-    }
+  // (2) รวม org IDs ที่ต้องดึง factors
+  const orgIds = [organizationId, systemOrg?.id].filter(Boolean) as string[];
+
+  if (orgIds.length === 0) {
+    return { ef: _buildEf([], EF), efRed: _buildEfRed([], EF_REDUCTION) };
   }
 
-  return { ef, efRed };
+  // (3) Single query: ดึงทุก factors ของ orgs ที่เกี่ยวข้อง ไม่จำกัดปี (เพื่อหา fallback ปีล่าสุดได้ด้วย)
+  const allFactors = await prisma.emissionFactor.findMany({
+    where: { organizationId: { in: orgIds } },
+    select: { organizationId: true, year: true, category: true, key: true, value: true },
+    orderBy: { year: 'desc' }
+  });
+
+  // (4) เลือก factors ตาม priority: org ที่ระบุ > ปีตรง > ปีล่าสุด > system org > fallback
+  const selected = _selectBestFactors(allFactors, year, organizationId, systemOrg?.id);
+
+  return {
+    ef:    _buildEf(selected, EF),
+    efRed: _buildEfRed(selected, EF_REDUCTION),
+  };
 }
+
+// ─── System Org Cache (module-level, reset on process restart) ────────────────
+let _systemOrgCache: { id: string } | null | undefined = undefined;
+async function _getSystemOrg() {
+  if (_systemOrgCache !== undefined) return _systemOrgCache;
+  _systemOrgCache = await prisma.organization.findFirst({
+    where: { code: 'SYSTEM', isSystem: true },
+    select: { id: true }
+  });
+  return _systemOrgCache;
+}
+
+// ─── เลือก factors ที่ดีที่สุดตาม Priority ───────────────────────────────────
+function _selectBestFactors(
+  all: Array<{ organizationId: string; year: number; category: string; key: string; value: number }>,
+  targetYear: number,
+  orgId?: string,
+  systemOrgId?: string
+) {
+  // จัดกลุ่มตาม orgId → year (เรียงลงแล้ว)
+  const byOrg: Record<string, typeof all> = {};
+  for (const f of all) {
+    if (!byOrg[f.organizationId]) byOrg[f.organizationId] = [];
+    byOrg[f.organizationId].push(f);
+  }
+
+  // หา factors ปีตรง หรือปีล่าสุดของ org ที่ระบุก่อน
+  if (orgId && byOrg[orgId]) {
+    const exactYear = byOrg[orgId].filter(f => f.year === targetYear);
+    if (exactYear.length > 0) return exactYear;
+    // fallback: ปีล่าสุดของ org
+    const latestYear = byOrg[orgId][0]?.year;
+    if (latestYear) return byOrg[orgId].filter(f => f.year === latestYear);
+  }
+
+  // fallback: System org
+  if (systemOrgId && byOrg[systemOrgId]) {
+    const exactYear = byOrg[systemOrgId].filter(f => f.year === targetYear);
+    if (exactYear.length > 0) return exactYear;
+    const latestYear = byOrg[systemOrgId][0]?.year;
+    if (latestYear) return byOrg[systemOrgId].filter(f => f.year === latestYear);
+  }
+
+  return [];
+}
+
+function _buildEf(factors: Array<{ category: string; key: string; value: number }>, defaults: typeof EF) {
+  const ef: any = {};
+  Object.keys(defaults).forEach(k => { ef[k] = 0; });
+  for (const f of factors) {
+    if (f.category !== 'reduction' && f.key in ef) ef[f.key] = f.value;
+  }
+  return ef;
+}
+
+function _buildEfRed(factors: Array<{ category: string; key: string; value: number }>, defaults: typeof EF_REDUCTION) {
+  const efRed: any = {};
+  Object.keys(defaults).forEach(k => { efRed[k] = 0; });
+  for (const f of factors) {
+    if (f.category === 'reduction' && f.key in efRed) efRed[f.key] = f.value;
+  }
+  return efRed;
+}
+
 
 function toDto(record: any): CarbonRecordDto {
   return {
@@ -304,7 +375,14 @@ export class CarbonRecordService {
         `ข้อมูลคาร์บอนของหน่วยงานนี้ เดือน ${data.month}/${data.year} มีอยู่แล้ว`
       );
     }
-    const { ef, efRed } = await loadFactorsForYear(data.year);
+
+    const dept = await prisma.department.findUnique({
+      where: { id: data.departmentId },
+      select: { organizationId: true }
+    });
+    const organizationId = dept?.organizationId;
+
+    const { ef, efRed } = await loadFactorsForYearAndOrg(data.year, organizationId);
     const calc = calculateAll(data, ef, efRed);
     const record = await carbonRecordRepository.create({ ...data, ...calc }, creatorId);
     return toDto(record);
@@ -314,7 +392,14 @@ export class CarbonRecordService {
     const existing = await carbonRecordRepository.findById(id);
     if (!existing) throw new NotFoundError('Carbon record not found');
     const merged = { ...existing, ...data };
-    const { ef, efRed } = await loadFactorsForYear(merged.year);
+
+    const dept = await prisma.department.findUnique({
+      where: { id: merged.departmentId },
+      select: { organizationId: true }
+    });
+    const organizationId = dept?.organizationId;
+
+    const { ef, efRed } = await loadFactorsForYearAndOrg(merged.year, organizationId);
     const calc = calculateAll(merged, ef, efRed);
     const record = await carbonRecordRepository.update(id, { ...data, ...calc }, updaterId);
     return toDto(record);

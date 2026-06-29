@@ -12,8 +12,9 @@ export class OrganizationController {
     const search = query.search || undefined;
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
+    const includeSystem = query.includeSystem === 'true';
 
-    const result = await organizationService.list({ page, limit, search, sortBy, sortOrder });
+    const result = await organizationService.list({ page, limit, search, sortBy, sortOrder, includeSystem });
     return reply.send(buildApiResponse({ success: true, message: 'Organizations retrieved', data: result.items, meta: result.meta }));
   }
 

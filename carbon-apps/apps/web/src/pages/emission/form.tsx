@@ -7,12 +7,12 @@ import { useToast } from '../../contexts/toast-context.js';
 import type { EmissionFactorDto } from '@enterprise/shared-types';
 import { ArrowLeft, Save, Loader2, Settings2, BookOpen } from 'lucide-react';
 
-const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
-const CURRENT_FISCAL_YEAR = new Date().getFullYear() + 543;
+const SYSTEM_START_YEAR = 2024; // ปีที่เริ่มเก็บข้อมูล ค.ศ. (ตรงกับ พ.ศ. 2567)
+const CURRENT_CE_YEAR = new Date().getFullYear();
 const FISCAL_YEARS = Array.from(
-  { length: CURRENT_FISCAL_YEAR - SYSTEM_START_YEAR + 1 },
-  (_, i) => CURRENT_FISCAL_YEAR - i
-); // [current, ..., 2565]
+  { length: CURRENT_CE_YEAR - SYSTEM_START_YEAR + 1 },
+  (_, i) => CURRENT_CE_YEAR - i
+); // [current, ..., 2024]
 
 const CATEGORIES = [
   { value: 'scope1', label: 'Scope 1 — การเผาไหม้โดยตรง + การรั่วซึม' },
@@ -53,7 +53,7 @@ export const EmissionFactorForm: React.FC = () => {
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     defaultValues: {
-      year: CURRENT_FISCAL_YEAR,
+      year: CURRENT_CE_YEAR,
       category: 'scope1',
       key: '',
       name: '',
@@ -116,7 +116,7 @@ export const EmissionFactorForm: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emission-factors-list'] });
       showToast(isEdit ? 'อัปเดตสำเร็จ' : 'เพิ่มรายการสำเร็จ', 'success');
-      navigate('/settings/emission-factors');
+      navigate('/emission-factors');
     },
     onError: (e: any) => showToast(e.response?.data?.message || e.message || 'เกิดข้อผิดพลาด', 'error')
   });
@@ -142,7 +142,7 @@ export const EmissionFactorForm: React.FC = () => {
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/settings/emission-factors')}
+        <button onClick={() => navigate('/emission-factors')}
           className="p-2 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors">
           <ArrowLeft size={18} />
         </button>
@@ -169,7 +169,7 @@ export const EmissionFactorForm: React.FC = () => {
               <select {...register('year', { required: true })}
                 disabled={isEdit}
                 className={`${ic} ${isEdit ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}>
-                {FISCAL_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                {FISCAL_YEARS.map(y => <option key={y} value={y}>{y + 543}</option>)}
               </select>
             </div>
 
@@ -293,7 +293,7 @@ export const EmissionFactorForm: React.FC = () => {
 
         {/* ── Action Buttons ── */}
         <div className="flex gap-3 justify-end pb-6">
-          <button type="button" onClick={() => navigate('/settings/emission-factors')}
+          <button type="button" onClick={() => navigate('/emission-factors')}
             className="px-5 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
             ยกเลิก
           </button>

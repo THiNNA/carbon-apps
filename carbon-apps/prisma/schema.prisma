@@ -8,19 +8,21 @@ generator client {
 }
 
 model Organization {
-  id          String       @id @default(uuid())
-  code        String       @unique
-  name        String
-  description String?
-  address     String?
-  phone       String?
-  departments Department[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deletedAt   DateTime?
-  createdBy   String?
-  updatedBy   String?
-  deletedBy   String?
+  id              String           @id @default(uuid())
+  code            String           @unique
+  name            String
+  description     String?
+  address         String?
+  phone           String?
+  isSystem        Boolean          @default(false)  // true = ค่ามาตรฐานกลางของระบบ (System defaults)
+  departments     Department[]
+  emissionFactors EmissionFactor[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
+  deletedBy       String?
 
   @@map("organizations")
 }
@@ -190,6 +192,11 @@ model CarbonRecord {
   deletedBy String?
 
   @@unique([departmentId, year, month])
+  // Performance indexes สำหรับ query patterns ที่ใช้บ่อย
+  @@index([year])                          // filter by year (dashboard, list)
+  @@index([year, month])                   // filter by year+month
+  @@index([departmentId, year])            // department stats by year
+  @@index([deletedAt])                     // soft-delete filter pattern
   @@map("carbon_records")
 }
 
@@ -260,23 +267,27 @@ model RolePermission {
 }
 
 model EmissionFactor {
-  id          String    @id @default(uuid())
-  year        Int
-  category    String    // scope1, scope2, scope3, reduction
-  key         String    // e.g. s1StationaryDiesel
-  name        String    // e.g. ปริมาณดีเซลเครื่องจักร
-  value       Float
-  unit        String    // e.g. kgCO2e/liter
-  source      String?   // แหล่งที่มาของค่าสัมประสิทธิ์
-  sourceUrl   String?   // URL อ้างอิง
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  createdBy   String?
-  updatedBy   String?
-  deletedBy   String?
+  id             String       @id @default(uuid())
+  year           Int
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  category       String       // scope1, scope2, scope3, reduction
+  key            String       // e.g. s1StationaryDiesel
+  name           String       // e.g. ปริมาณดีเซลเครื่องจักร
+  value          Float
+  unit           String       // e.g. kgCO2e/liter
+  source         String?      // แหล่งที่มาของค่าสัมประสิทธิ์
+  sourceUrl      String?      // URL อ้างอิง
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+  createdBy      String?
+  updatedBy      String?
+  deletedBy      String?
 
-  @@unique([year, key])
+  @@unique([year, key, organizationId])
+  // Performance index สำหรับ loadFactorsForYearAndOrg fallback lookup
+  @@index([organizationId, year])          // ค้นหาปีล่าสุดของ org
   @@map("emission_factors")
 }
 

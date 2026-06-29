@@ -6,12 +6,12 @@ import { LoadingSpinner } from '../components/loading-spinner.js';
 import { Leaf, TrendingUp, TrendingDown, Calendar, Building, Landmark, AlertTriangle } from 'lucide-react';
 import type { CarbonDashboardStatsDto, OrganizationDto, DepartmentDto } from '@enterprise/shared-types';
 
-const SYSTEM_START_YEAR = 2567; // ปีที่เริ่มเก็บข้อมูล
-const CURRENT_THAI_YEAR = new Date().getFullYear() + 543;
-const THAI_YEAR_OPTIONS = Array.from(
-  { length: CURRENT_THAI_YEAR - SYSTEM_START_YEAR + 1 },
-  (_, i) => CURRENT_THAI_YEAR - i
-); // [current, ..., 2565]
+const SYSTEM_START_YEAR = 2024; // ปีที่เริ่มเก็บข้อมูล ค.ศ. (ตรงกับ พ.ศ. 2567)
+const CURRENT_CE_YEAR = new Date().getFullYear();
+const CE_YEAR_OPTIONS = Array.from(
+  { length: Math.max(3, CURRENT_CE_YEAR - SYSTEM_START_YEAR + 1) },
+  (_, i) => Math.max(CURRENT_CE_YEAR, 2026) - i
+); // รับประกันมีอย่างน้อย 3 ปีเสมอ (2026, 2025, 2024) ป้องกัน array ว่าง
 const fmt = (v: number | undefined | null) => (v ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const ic = 'px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400';
@@ -22,8 +22,7 @@ export const Dashboard: React.FC = () => {
   const isAdmin = payload?.roles.includes('Admin') || false;
 
   // Filters State (stored as พ.ศ., converted to ค.ศ. when calling API)
-  const [year, setYear] = useState<number>(CURRENT_THAI_YEAR);
-  const [baseYear, setBaseYear] = useState<number>(CURRENT_THAI_YEAR - 1);
+  const [year, setYear] = useState<number>(0); // 0 = ยังไม่ได้โหลด available years
   const [orgId, setOrgId] = useState<string>('');
   const [deptId, setDeptId] = useState<string>('');
 
@@ -41,7 +40,8 @@ export const Dashboard: React.FC = () => {
       const res: any = await api.get('/organizations', { params: { limit: 100 } });
       return res.data;
     },
-    enabled: isSuperAdmin
+    enabled: isSuperAdmin,
+    staleTime: 5 * 60 * 1000, // cache 5 นาที
   });
 
   const { data: filterDepts } = useQuery<DepartmentDto[]>({
@@ -50,23 +50,73 @@ export const Dashboard: React.FC = () => {
       const res: any = await api.get('/departments/all', { params: { organizationId: orgId || undefined } });
       return res.data;
     },
-    enabled: isSuperAdmin || (isAdmin && !!orgId)
+    enabled: isSuperAdmin || (isAdmin && !!orgId),
+    staleTime: 5 * 60 * 1000, // cache 5 นาที
   });
+
+  // ปีที่มีข้อมูลจริงในระบบ (BE)
+  const { data: availableYears } = useQuery<number[]>({
+    queryKey: ['available-years', orgId, deptId],
+    queryFn: async () => {
+      const res: any = await api.get('/dashboard/available-years', {
+        params: { organizationId: orgId || undefined, departmentId: deptId || undefined }
+      });
+      // API คืนเป็น ค.ศ. → ใช้เป็น ค.ศ. ตรงๆ ใน State
+      return res.data as number[];
+    },
+    staleTime: 5 * 60 * 1000, // cache 5 นาที
+  });
+
+  // ตั้ง year เริ่มต้นเมื่อ availableYears โหลดเสร็จ
+  useEffect(() => {
+    if (availableYears) {
+      if (availableYears.length > 0 && year === 0) {
+        setYear(availableYears[0]); // ปีล่าสุดที่มีข้อมูล
+      } else if (availableYears.length === 0 && year === 0) {
+        setYear(CURRENT_CE_YEAR); // ถ้าไม่มีข้อมูลเลย ให้ตั้งเป็นปีปัจจุบัน
+      }
+    }
+  }, [availableYears, year]);
+
+  // ปีฐาน = ปีก่อนหน้าที่ใกล้ที่สุดที่มีข้อมูล ถ้าไม่มีให้เปรียบกับตัวเอง
+  const baseYear = availableYears
+    ? (availableYears.find(y => y < year) ?? year)
+    : year;
 
   const { data: stats, isLoading, error } = useQuery<CarbonDashboardStatsDto>({
     queryKey: ['carbon-dashboard-stats', year, baseYear, orgId, deptId],
     queryFn: async () => {
       const res: any = await api.get('/dashboard/carbon-stats', {
         params: {
-          year: year - 543,       // convert พ.ศ. → ค.ศ. for API
-          baseYear: baseYear - 543, // convert พ.ศ. → ค.ศ. for API
+          year,       // ส่ง ค.ศ. ไปยัง API ตรงๆ
+          baseYear,   // ส่ง ค.ศ. ไปยัง API ตรงๆ
           organizationId: orgId || undefined,
           departmentId: deptId || undefined
         }
       });
       return res.data;
-    }
+    },
+    enabled: year > 0
   });
+
+  // กำลังรอ API available-years
+  if (availableYears === undefined) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // availableYears มีข้อมูล แต่ year ยังเป็น 0 (รอ useEffect ตั้งค่า)
+  if (year === 0) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
 
   if (isLoading) {
     return (
@@ -122,23 +172,15 @@ export const Dashboard: React.FC = () => {
           {/* Year */}
           <div className="flex items-center gap-2">
             <Calendar size={16} className="text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500 uppercase">ปีปัจจุบัน:</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase">ปี:</span>
             <select value={year} onChange={e => setYear(Number(e.target.value))} className={ic}>
-              {THAI_YEAR_OPTIONS.map(y => (
-                <option key={y} value={y}>{y}</option>
+              {CE_YEAR_OPTIONS.map(y => (
+                <option key={y} value={y}>{y + 543}</option>
               ))}
             </select>
-          </div>
-
-          {/* Base Year */}
-          <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500 uppercase">ปีฐาน:</span>
-            <select value={baseYear} onChange={e => setBaseYear(Number(e.target.value))} className={ic}>
-              {THAI_YEAR_OPTIONS.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+            <span className="text-xs text-slate-400">
+              เทียบกับ {baseYear === year ? `ปี ${year + 543}` : `ปี ${baseYear + 543}`}
+            </span>
           </div>
 
           {/* Organization Filter (SuperAdmin only) */}
@@ -160,9 +202,14 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center gap-2">
               <Landmark size={16} className="text-slate-400" />
               <span className="text-xs font-semibold text-slate-500 uppercase">หน่วยงาน/กลุ่มงาน:</span>
-              <select value={deptId} onChange={e => setDeptId(e.target.value)} className={ic}>
+              <select
+                value={deptId}
+                onChange={e => setDeptId(e.target.value)}
+                className={`${ic} disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed`}
+                disabled={isSuperAdmin && !orgId}
+              >
                 <option value="">ทุกหน่วยงาน</option>
-                {filterDepts?.map(d => (
+                {orgId && filterDepts?.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
@@ -170,12 +217,12 @@ export const Dashboard: React.FC = () => {
           )}
 
           {/* Static Info for Roles */}
-          {!isSuperAdmin && !isAdmin && (
+          {/* {!isSuperAdmin && !isAdmin && (
             <div className="ml-auto flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
               <Building size={14} />
               <span>{payload?.email} (ระดับหน่วยงาน)</span>
             </div>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -190,10 +237,10 @@ export const Dashboard: React.FC = () => {
                 การปล่อยก๊าซเรือนกระจกสะสม
               </p>
               <p className="text-2xl font-bold text-slate-800 mt-2">{fmt(cy.emission)}</p>
-              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year})</p>
+              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year + 543})</p>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-400">ปีฐาน ({baseYear}): {fmt(by.emission)}</span>
+              <span className="text-slate-400">ปีฐาน ({baseYear + 543}): {fmt(by.emission)}</span>
               <span className={`flex items-center gap-0.5 font-bold ${emissionDiff > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                 {emissionDiff > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {emissionDiff > 0 ? '+' : ''}{emissionDiff.toFixed(1)}%
@@ -211,10 +258,10 @@ export const Dashboard: React.FC = () => {
                 กิจกรรมการลดก๊าซเรือนกระจก
               </p>
               <p className="text-2xl font-bold text-emerald-600 mt-2">-{fmt(cy.reduction)}</p>
-              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year})</p>
+              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year + 543})</p>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-400">ปีฐาน ({baseYear}): -{fmt(by.reduction)}</span>
+              <span className="text-slate-400">ปีฐาน ({baseYear + 543}): -{fmt(by.reduction)}</span>
               <span className={`flex items-center gap-0.5 font-bold ${reductionDiff > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                 {reductionDiff > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {reductionDiff > 0 ? '+' : ''}{reductionDiff.toFixed(1)}%
@@ -232,10 +279,10 @@ export const Dashboard: React.FC = () => {
                 การดูดกลับก๊าซเรือนกระจก (ต้นไม้)
               </p>
               <p className="text-2xl font-bold text-teal-600 mt-2">-{fmt(cy.removal)}</p>
-              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year})</p>
+              <p className="text-xs text-slate-400 mt-1">kgCO₂e (ปี {year + 543})</p>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-400">ปีฐาน ({baseYear}): -{fmt(by.removal)}</span>
+              <span className="text-slate-400">ปีฐาน ({baseYear + 543}): -{fmt(by.removal)}</span>
               <span className={`flex items-center gap-0.5 font-bold ${removalDiff >= 0 ? 'text-teal-600' : 'text-slate-400'}`}>
                 {removalDiff >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {removalDiff >= 0 ? '+' : ''}{removalDiff.toFixed(1)}%
@@ -253,10 +300,10 @@ export const Dashboard: React.FC = () => {
             <p className="text-3xl font-extrabold mt-2">
               {cy.net < 0 ? '' : '+'}{fmt(cy.net)}
             </p>
-            <p className="text-xs text-emerald-100 mt-1">kgCO₂e (ปี {year})</p>
+            <p className="text-xs text-emerald-100 mt-1">kgCO₂e (ปี {year + 543})</p>
           </div>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between text-xs">
-            <span className="text-emerald-100">ปีฐาน ({baseYear}): {fmt(by.net)}</span>
+            <span className="text-emerald-100">ปีฐาน ({baseYear + 543}): {fmt(by.net)}</span>
             <span className={`flex items-center gap-0.5 font-extrabold ${netDiff <= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
               {netDiff <= 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />}
               {netDiff > 0 ? '+' : ''}{netDiff.toFixed(1)}%

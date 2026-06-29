@@ -7,8 +7,10 @@ import type { Column } from '../../components/data-table.js';
 import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import type { UserDto, RoleDto, OrganizationDto, DepartmentDto } from '@enterprise/shared-types';
 import { Plus, Pencil, Trash2, Eye, Search } from 'lucide-react';
-import { formatDate, formatDateTime } from '../../services/date.js';
 import { useAuth } from '../../contexts/auth-context.js';
+import { formatDateTime } from '../../services/date.js';
+import { Select2 } from '../../components/select2.js';
+
 
 export const UserList: React.FC = () => {
   const queryClient = useQueryClient();
@@ -39,7 +41,7 @@ export const UserList: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserDto | null>(null);
-  
+
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [userToActOn, setUserToActOn] = useState<UserDto | null>(null);
 
@@ -73,7 +75,8 @@ export const UserList: React.FC = () => {
     queryFn: async () => {
       const response: any = await api.get('/roles', { params: { limit: 100 } });
       return response.data;
-    }
+    },
+    staleTime: 5 * 60 * 1000,  // P2-B: roles เปลี่ยนน้อย cache 5 นาที
   });
 
   const { data: orgsData } = useQuery<OrganizationDto[]>({
@@ -82,7 +85,8 @@ export const UserList: React.FC = () => {
       const response: any = await api.get('/organizations', { params: { limit: 100 } });
       return response.data;
     },
-    enabled: isSuperAdmin
+    enabled: isSuperAdmin,
+    staleTime: 5 * 60 * 1000,  // P2-B: orgs เปลี่ยนน้อย cache 5 นาที
   });
 
   // Departments for list filter (scoped by filterOrgId for SuperAdmin or auto-scoped for Admin)
@@ -94,7 +98,8 @@ export const UserList: React.FC = () => {
       });
       return response.data;
     },
-    enabled: isSuperAdmin || isAdmin
+    enabled: isSuperAdmin || isAdmin,
+    staleTime: 5 * 60 * 1000,  // P2-B: depts เปลี่ยนน้อย cache 5 นาที
   });
 
   // Departments for form (scoped by formOrgId selection)
@@ -254,6 +259,7 @@ export const UserList: React.FC = () => {
     {
       key: 'role',
       header: 'บทบาท',
+      align: 'center',
       render: (row) => (
         <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700">
           {row.role?.name || 'ไม่มีบทบาท'}
@@ -274,7 +280,18 @@ export const UserList: React.FC = () => {
       key: 'createdAt',
       header: 'วันที่ลงทะเบียน',
       sortable: true,
-      render: (row) => formatDate(row.createdAt)
+      align: 'center',
+      render: (row: any) => (
+        <span className="text-xs text-slate-500 font-mono">
+          {new Date(row.createdAt).toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+      )
     },
     {
       key: 'actions',
@@ -341,25 +358,33 @@ export const UserList: React.FC = () => {
           />
         </div>
         {isSuperAdmin && (
-          <select
-            value={filterOrgId}
-            onChange={(e) => { setFilterOrgId(e.target.value); setFilterDeptId(''); setPage(1); }}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">ทุกองค์กร</option>
-            {(orgsData || []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          <div className="flex-1">
+            <Select2
+              value={filterOrgId}
+              onChange={(val) => { setFilterOrgId(val); setFilterDeptId(''); setPage(1); }}
+              placeholder="ทุกองค์กร"
+              options={[
+                { value: '', label: 'ทุกองค์กร' },
+                ...(orgsData || []).map((o) => ({ value: o.id, label: o.name }))
+              ]}
+            />
+          </div>
         )}
         {(isSuperAdmin || isAdmin) && (
-          <select
-            value={filterDeptId}
-            onChange={(e) => { setFilterDeptId(e.target.value); setPage(1); }}
-            className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">ทุกหน่วยงาน</option>
-            {(filterDeptsData || []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
+          <div className="flex-1">
+            <Select2
+              disabled={isSuperAdmin && !filterOrgId}
+              value={filterDeptId}
+              onChange={(val) => { setFilterDeptId(val); setPage(1); }}
+              placeholder="ทุกหน่วยงาน"
+              options={[
+                { value: '', label: 'ทุกหน่วยงาน' },
+                ...(filterOrgId && filterDeptsData ? filterDeptsData.map((d) => ({ value: d.id, label: d.name })) : [])
+              ]}
+            />
+          </div>
         )}
+
       </div>
 
       <DataTable
@@ -429,40 +454,44 @@ export const UserList: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">บทบาท</label>
-                <select value={formRoleId} onChange={(e) => setFormRoleId(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
-                  <option value="">เลือกบทบาท</option>
-                  {roles
+                <Select2
+                  value={formRoleId}
+                  onChange={(val) => setFormRoleId(val)}
+                  placeholder="เลือกบทบาท"
+                  options={roles
                     .filter((r) => isSuperAdmin || r.name !== 'SuperAdmin')
-                    .map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
+                    .map((r) => ({ value: r.id, label: r.name }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">องค์กร</label>
                 {isSuperAdmin ? (
-                  <select value={formOrgId} onChange={(e) => { setFormOrgId(e.target.value); setFormDeptId(''); }}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                    <option value="">-- เลือกองค์กร --</option>
-                    {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
+                  <Select2
+                    value={formOrgId}
+                    onChange={(val) => { setFormOrgId(val); setFormDeptId(''); }}
+                    placeholder="-- เลือกองค์กร --"
+                    options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+                  />
                 ) : (
                   <input
                     type="text"
                     value={adminOrgName}
                     readOnly
                     disabled
-                    className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm cursor-not-allowed"
+                    className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm cursor-not-allowed font-bold"
                   />
                 )}
               </div>
               {formOrgId && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">หน่วยงาน</label>
-                  <select value={formDeptId} onChange={(e) => setFormDeptId(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                    <option value="">-- เลือกหน่วยงาน --</option>
-                    {depts.filter(d => d.organizationId === formOrgId).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <Select2
+                    value={formDeptId}
+                    onChange={(val) => setFormDeptId(val)}
+                    placeholder="-- เลือกหน่วยงาน --"
+                    options={depts.filter(d => d.organizationId === formOrgId).map((d) => ({ value: d.id, label: d.name }))}
+                    openUp={true}
+                  />
                 </div>
               )}
               <div className="flex justify-end gap-3 pt-4">
@@ -526,40 +555,44 @@ export const UserList: React.FC = () => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">บทบาท</label>
-                <select value={formRoleId} onChange={(e) => setFormRoleId(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm" required>
-                  <option value="">เลือกบทบาท</option>
-                  {roles
+                <Select2
+                  value={formRoleId}
+                  onChange={(val) => setFormRoleId(val)}
+                  placeholder="เลือกบทบาท"
+                  options={roles
                     .filter((r) => isSuperAdmin || r.name !== 'SuperAdmin')
-                    .map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
+                    .map((r) => ({ value: r.id, label: r.name }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">องค์กร</label>
                 {isSuperAdmin ? (
-                  <select value={formOrgId} onChange={(e) => { setFormOrgId(e.target.value); setFormDeptId(''); }}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                    <option value="">-- เลือกองค์กร --</option>
-                    {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
+                  <Select2
+                    value={formOrgId}
+                    onChange={(val) => { setFormOrgId(val); setFormDeptId(''); }}
+                    placeholder="-- เลือกองค์กร --"
+                    options={orgs.map((o) => ({ value: o.id, label: o.name }))}
+                  />
                 ) : (
                   <input
                     type="text"
                     value={adminOrgName}
                     readOnly
                     disabled
-                    className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm cursor-not-allowed"
+                    className="w-full px-4 py-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 text-sm cursor-not-allowed font-bold"
                   />
                 )}
               </div>
               {formOrgId && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">หน่วยงาน</label>
-                  <select value={formDeptId} onChange={(e) => setFormDeptId(e.target.value)}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-                    <option value="">-- เลือกหน่วยงาน --</option>
-                    {depts.filter(d => d.organizationId === formOrgId).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
+                  <Select2
+                    value={formDeptId}
+                    onChange={(val) => setFormDeptId(val)}
+                    placeholder="-- เลือกหน่วยงาน --"
+                    options={depts.filter(d => d.organizationId === formOrgId).map((d) => ({ value: d.id, label: d.name }))}
+                    openUp={true}
+                  />
                 </div>
               )}
               <div className="flex justify-end gap-3 pt-4">
@@ -589,10 +622,10 @@ export const UserList: React.FC = () => {
           <div className="relative glass-panel rounded-xl shadow-2xl p-6 max-w-md w-full bg-white/95 text-slate-800 z-10">
             <h3 className="text-lg font-bold text-slate-900 mb-4 border-b pb-2">รายละเอียดผู้ใช้งาน</h3>
             <div className="space-y-3.5 text-sm text-slate-800">
-              <div className="grid grid-cols-3">
+              {/* <div className="grid grid-cols-3">
                 <span className="font-semibold text-slate-400">รหัสผู้ใช้งาน</span>
                 <span className="col-span-2 text-slate-800 break-all font-mono text-xs">{selectedUser.id}</span>
-              </div>
+              </div> */}
               <div className="grid grid-cols-3">
                 <span className="font-semibold text-slate-400">ชื่อเต็ม</span>
                 <span className="col-span-2 text-slate-850 font-medium">{selectedUser.name}</span>
@@ -614,8 +647,8 @@ export const UserList: React.FC = () => {
                 <span className="col-span-2">
                   {selectedUser.department ? (
                     <span>
-                      <span className="font-semibold">{selectedUser.department.name}</span>
-                      <span className="text-slate-400 text-xs ml-1">({selectedUser.department.organization?.name})</span>
+                      <span className="font-semibold">{selectedUser.department.name}</span><br />
+                      <span className="text-slate-400 text-xs">({selectedUser.department.organization?.name})</span>
                     </span>
                   ) : <span className="text-slate-300">—</span>}
                 </span>

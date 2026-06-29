@@ -7,19 +7,33 @@ export class OrganizationRepository {
     limit,
     search,
     sortBy = 'createdAt',
-    sortOrder = 'desc'
+    sortOrder = 'desc',
+    includeSystem = false  // ซ่อน org SYSTEM จากทุก listing/dropdown โดย default
   }: {
     page: number;
     limit: number;
     search?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
+    includeSystem?: boolean;
   }) {
     const where: any = {};
+
+    // ซ่อน System org ออกจาก listing ปกติ
+    if (!includeSystem) {
+      where.isSystem = false;
+    }
+
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { code: { contains: search } }
+      // ใช้ AND เพื่อรวม isSystem filter กับ search condition
+      where.AND = [
+        ...(where.AND ?? []),
+        {
+          OR: [
+            { name: { contains: search } },
+            { code: { contains: search } }
+          ]
+        }
       ];
     }
 
