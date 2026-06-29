@@ -3,21 +3,22 @@ import { emissionFactorController } from './controller.js';
 import { authenticate, requireRole } from '../../common/middleware/auth.js';
 
 export async function emissionFactorRoutes(app: FastifyInstance) {
-  // Access restricted to SuperAdmin and Admin
+  // ทุกคนต้องระบุตัวตนก่อนเข้าใช้งาน
   app.addHook('preHandler', authenticate);
-  app.addHook('preHandler', requireRole('Admin'));
 
+  // Read-only endpoints: เข้าถึงได้ทุกคนที่มีสิทธิ์ในระบบ (รวมถึง User ธรรมดาเพื่อใช้ในฟอร์มคำนวณ)
   app.get('/', emissionFactorController.list.bind(emissionFactorController));
   app.get('/groups', emissionFactorController.groups.bind(emissionFactorController));
   app.get('/:id', emissionFactorController.getById.bind(emissionFactorController));
-  app.post('/', emissionFactorController.create.bind(emissionFactorController));
-  app.put('/:id', emissionFactorController.update.bind(emissionFactorController));
-  app.post('/bulk-update', emissionFactorController.bulkUpdate.bind(emissionFactorController));
-  app.post('/clone', emissionFactorController.clone.bind(emissionFactorController));
-  app.post('/initialize', emissionFactorController.initialize.bind(emissionFactorController));
-  app.delete('/', emissionFactorController.delete.bind(emissionFactorController));
-
-  // System defaults: read (Admin+), initialize (SuperAdmin only via controller guard)
   app.get('/system-defaults', emissionFactorController.listSystemDefaults.bind(emissionFactorController));
-  app.post('/system-defaults/initialize', emissionFactorController.initializeSystemDefaults.bind(emissionFactorController));
+
+  // Write/Mutate endpoints: เฉพาะ Admin หรือ SuperAdmin เท่านั้น
+  const adminGuard = { preHandler: [requireRole('Admin')] };
+  app.post('/', adminGuard, emissionFactorController.create.bind(emissionFactorController));
+  app.put('/:id', adminGuard, emissionFactorController.update.bind(emissionFactorController));
+  app.post('/bulk-update', adminGuard, emissionFactorController.bulkUpdate.bind(emissionFactorController));
+  app.post('/clone', adminGuard, emissionFactorController.clone.bind(emissionFactorController));
+  app.post('/initialize', adminGuard, emissionFactorController.initialize.bind(emissionFactorController));
+  app.delete('/', adminGuard, emissionFactorController.delete.bind(emissionFactorController));
+  app.post('/system-defaults/initialize', adminGuard, emissionFactorController.initializeSystemDefaults.bind(emissionFactorController));
 }

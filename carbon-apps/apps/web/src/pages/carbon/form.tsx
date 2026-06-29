@@ -31,6 +31,14 @@ const EF = {
   s3GeneralWaste: 0.50, s3HazWasteLandfill: 0.50, s3HazWasteIncin: 0.50, s3InfWasteIncin: 0.50, s3InfWasteAutoclaveExt: 0.243,
   s3TravelCar: 0.168, s3TravelPlane: 0.1539,
   redCompostFood: 0.43, redCompostLeaf: 0.11, redSolar: 0.5781, redTree: 3.67 / 12,
+  // เพิ่มคีย์ตลับหมึกพิมพ์และสารเคมี
+  s3TonerCartridges: 4.8000,
+  s3AlcoholMl: 0.0021,
+  s3NaohKg: 1.1200,
+  s3AlumKg: 0.2000,
+  s3SulfuricAcidKg: 0.2500,
+  s3LimeKg: 1.0000,
+  s3ChlorineKg: 1.0800,
 };
 
 
@@ -103,38 +111,45 @@ const DEFAULT_FORM: FormState = {
   redTreeCount: 0, redTelemedicineCo2e: 0, redOtherCo2e: 0, redOtherDesc: '',
 };
 
-const calcS1 = (f: FormState) => {
+const calcS1 = (f: FormState, ef: typeof EF = EF) => {
   const wastewaterAnaerobic =
     (5 * f.s1WastewaterWaterM3 * (f.s1WastewaterCodAnaerobicShallow / 1000)) +
     (20 * f.s1WastewaterWaterM3 * (f.s1WastewaterCodAnaerobicDeep / 1000));
 
   return (
-    f.s1StationaryDieselLiters * EF.s1StationaryDiesel + f.s1StationaryGasolineLiters * EF.s1StationaryGasoline + f.s1CookingLpgKg * EF.s1CookingLpg +
-    f.s1VehicleDieselLiters * EF.s1VehicleDiesel + f.s1VehicleGasolineLiters * EF.s1VehicleGasoline + f.s1VehicleCngKg * EF.s1VehicleCng +
-    f.s1FireExtCo2Kg * EF.s1FireExtCo2 + f.s1RefrigHfc134aKg * EF.s1RefrigHfc134a + f.s1RefrigR22Kg * EF.s1RefrigR22 +
-    f.s1AnesthesiaN2oMl * EF.s1AnesthesiaN2o + f.s1AnesthesiaIsoflurMl * EF.s1AnesthesiaIsoflur +
-    f.s1AnesthesiaDesfluMl * EF.s1AnesthesiaDesflu + f.s1AnesthesiaSevoflurMl * EF.s1AnesthesiaSevoflur +
-    f.s1InfWasteAutoclaveKg * EF.s1InfWasteAutoclave + f.s1OrganicWasteFermentKg * EF.s1OrganicWasteFerment + f.s1OrganicWasteCompostKg * EF.s1OrganicWasteCompost +
+    f.s1StationaryDieselLiters * ef.s1StationaryDiesel + f.s1StationaryGasolineLiters * ef.s1StationaryGasoline + f.s1CookingLpgKg * ef.s1CookingLpg +
+    f.s1VehicleDieselLiters * ef.s1VehicleDiesel + f.s1VehicleGasolineLiters * ef.s1VehicleGasoline + f.s1VehicleCngKg * ef.s1VehicleCng +
+    f.s1FireExtCo2Kg * ef.s1FireExtCo2 + f.s1RefrigHfc134aKg * ef.s1RefrigHfc134a + f.s1RefrigR22Kg * ef.s1RefrigR22 +
+    f.s1AnesthesiaN2oMl * ef.s1AnesthesiaN2o + f.s1AnesthesiaIsoflurMl * ef.s1AnesthesiaIsoflur +
+    f.s1AnesthesiaDesfluMl * ef.s1AnesthesiaDesflu + f.s1AnesthesiaSevoflurMl * ef.s1AnesthesiaSevoflur +
+    f.s1InfWasteAutoclaveKg * ef.s1InfWasteAutoclave + f.s1OrganicWasteFermentKg * ef.s1OrganicWasteFerment + f.s1OrganicWasteCompostKg * ef.s1OrganicWasteCompost +
     wastewaterAnaerobic
   );
 };
 
-const calcS2 = (f: FormState) => f.s2ElectricityKwh * EF.s2Electricity;
+const calcS2 = (f: FormState, ef: typeof EF = EF) => f.s2ElectricityKwh * ef.s2Electricity;
 
-const calcS3 = (f: FormState) =>
-  f.s3WaterCubicM * EF.s3Water + f.s3PaperA4Reams * EF.s3PaperA4 + f.s3PlasticBagKg * EF.s3PlasticBag +
-  f.s3OutsourceDieselLiters * EF.s3OutsourceDiesel + f.s3OutsourceGasolineLiters * EF.s3OutsourceGasoline +
-  f.s3GeneralWasteKg * EF.s3GeneralWaste + f.s3HazardousWasteLandfillKg * EF.s3HazWasteLandfill +
-  f.s3HazardousWasteIncinKg * EF.s3HazWasteIncin + f.s3InfWasteIncinKg * EF.s3InfWasteIncin +
-  f.s3InfWasteAutoclaveExtKg * EF.s3InfWasteAutoclaveExt + f.s3TravelCarKm * EF.s3TravelCar + f.s3TravelPlaneKm * EF.s3TravelPlane;
+const calcS3 = (f: FormState, ef: typeof EF = EF) =>
+  f.s3WaterCubicM * ef.s3Water + f.s3PaperA4Reams * ef.s3PaperA4 + f.s3PlasticBagKg * ef.s3PlasticBag +
+  f.s3OutsourceDieselLiters * ef.s3OutsourceDiesel + f.s3OutsourceGasolineLiters * ef.s3OutsourceGasoline +
+  f.s3GeneralWasteKg * ef.s3GeneralWaste + f.s3HazardousWasteLandfillKg * ef.s3HazWasteLandfill +
+  f.s3HazardousWasteIncinKg * ef.s3HazWasteIncin + f.s3InfWasteIncinKg * ef.s3InfWasteIncin +
+  f.s3InfWasteAutoclaveExtKg * ef.s3InfWasteAutoclaveExt + f.s3TravelCarKm * ef.s3TravelCar + f.s3TravelPlaneKm * ef.s3TravelPlane +
+  f.s3TonerCartridges * ef.s3TonerCartridges +
+  f.s3AlcoholMl * ef.s3AlcoholMl +
+  f.s3NaohKg * ef.s3NaohKg +
+  f.s3AlumKg * ef.s3AlumKg +
+  f.s3SulfuricAcidKg * ef.s3SulfuricAcidKg +
+  f.s3LimeKg * ef.s3LimeKg +
+  f.s3ChlorineKg * ef.s3ChlorineKg;
 
-const calcReduction = (f: FormState) => {
+const calcReduction = (f: FormState, ef: typeof EF = EF) => {
   let solarKwh = f.redSolarMeteredKwh;
   if (!f.redSolarHasMeter && f.redSolarPanelWatts > 0)
     solarKwh = (f.redSolarPanelWatts * f.redSolarPanelCount * f.redSolarDays * 4) / 1000;
   const solarNet = Math.max(0, solarKwh - f.redSolarUsedKwh);
-  return f.redCompostFoodWasteKg * EF.redCompostFood + f.redCompostLeafBranchKg * EF.redCompostLeaf +
-    solarNet * EF.redSolar + f.redTreeCount * EF.redTree + f.redTelemedicineCo2e + f.redOtherCo2e;
+  return f.redCompostFoodWasteKg * ef.redCompostFood + f.redCompostLeafBranchKg * ef.redCompostLeaf +
+    solarNet * ef.redSolar + f.redTreeCount * ef.redTree + f.redTelemedicineCo2e + f.redOtherCo2e;
 };
 
 const fmt = (v: number | undefined | null) => (v ?? 0).toFixed(2);
@@ -294,6 +309,47 @@ export const CarbonRecordForm: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Fetch emission factors for the selected year and organization
+  const { data: dbFactors } = useQuery<any[]>({
+    queryKey: ['emission-factors-for-calculation', formData.year, deptOrgId],
+    queryFn: async () => {
+      const res: any = await api.get('/emission-factors', {
+        params: { year: formData.year, organizationId: deptOrgId || undefined }
+      });
+      return res.data ?? [];
+    },
+    enabled: !!formData.year && !!deptOrgId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const activeEF = React.useMemo(() => {
+    const ef = { ...EF };
+    if (!dbFactors || dbFactors.length === 0) return ef;
+
+    // Map DB key names to frontend EF property names
+    const keyMap: Record<string, keyof typeof EF> = {
+      s3GeneralWasteLandfill: 's3GeneralWaste',
+      s3HazardousWasteLandfill: 's3HazWasteLandfill',
+      s3HazardousWasteIncin: 's3HazWasteIncin',
+      compostFoodWaste: 'redCompostFood',
+      compostLeafBranch: 'redCompostLeaf',
+      solarElectricity: 'redSolar',
+      treePerYear: 'redTree',
+    };
+
+    for (const item of dbFactors) {
+      const efKey = keyMap[item.key] || item.key;
+      if (efKey in ef) {
+        if (efKey === 'redTree') {
+          ef[efKey] = item.value / 12; // tree absorption per month
+        } else {
+          (ef as any)[efKey] = item.value;
+        }
+      }
+    }
+    return ef;
+  }, [dbFactors]);
+
   // Load editing record data if edit mode
   const { data: record, isSuccess, isError } = useQuery<CarbonRecordDto>({
     queryKey: ['carbon-record-detail', id],
@@ -369,10 +425,10 @@ export const CarbonRecordForm: React.FC = () => {
     }
   };
 
-  const s1 = calcS1(formData);
-  const s2 = calcS2(formData);
-  const s3 = calcS3(formData);
-  const red = calcReduction(formData);
+  const s1 = calcS1(formData, activeEF);
+  const s2 = calcS2(formData, activeEF);
+  const s3 = calcS3(formData, activeEF);
+  const red = calcReduction(formData, activeEF);
   const total = s1 + s2 + s3;
   const net = total - red;
 

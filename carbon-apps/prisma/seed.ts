@@ -250,6 +250,13 @@ async function main() {
     { category: 'scope3', key: 's3InfWasteAutoclaveExt', name: 'ขยะติดเชื้อ อบฆ่าเชื้อภายนอก', value: 0.2430, unit: 'kgCO2e/กก.' },
     { category: 'scope3', key: 's3TravelCar', name: 'การเดินทางด้วยรถยนต์ส่วนตัว/องค์กร', value: 0.1680, unit: 'kgCO2e/กม.' },
     { category: 'scope3', key: 's3TravelPlane', name: 'การเดินทางด้วยเครื่องบินชั้นประหยัด', value: 0.1539, unit: 'kgCO2e/กม.' },
+    { category: 'scope3', key: 's3TonerCartridges', name: 'ตลับหมึกพิมพ์เลเซอร์', value: 4.8000, unit: 'kgCO2e/ตลับ' },
+    { category: 'scope3', key: 's3AlcoholMl', name: 'ปริมาณการใช้ Alcohol', value: 0.0021, unit: 'kgCO2e/มล.' },
+    { category: 'scope3', key: 's3NaohKg', name: 'โซดาไฟ NaOH', value: 1.1200, unit: 'kgCO2e/กก.' },
+    { category: 'scope3', key: 's3AlumKg', name: 'สารส้ม', value: 0.2000, unit: 'kgCO2e/กก.' },
+    { category: 'scope3', key: 's3SulfuricAcidKg', name: 'กรดซัลฟิวริก', value: 0.2500, unit: 'kgCO2e/กก.' },
+    { category: 'scope3', key: 's3LimeKg', name: 'ปูนขาว', value: 1.0000, unit: 'kgCO2e/กก.' },
+    { category: 'scope3', key: 's3ChlorineKg', name: 'คลอรีน', value: 1.0800, unit: 'kgCO2e/กก.' },
     // Reduction
     { category: 'reduction', key: 'compostFoodWaste', name: 'ปุ๋ยหมักเศษอาหาร', value: 0.4300, unit: 'kgCO2e/กก.' },
     { category: 'reduction', key: 'compostLeafBranch', name: 'ปุ๋ยหมักกิ่งไม้ใบไม้', value: 0.1102, unit: 'kgCO2e/กก.' },

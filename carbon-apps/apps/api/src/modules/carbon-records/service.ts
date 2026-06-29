@@ -46,6 +46,14 @@ export const EF = {
   // Scope 3: Travel
   s3TravelCar:   0.168,
   s3TravelPlane: 0.1539,
+  // ตลับหมึกพิมพ์เลเซอร์และสารเคมีเพิ่มเติม
+  s3TonerCartridges: 4.8000,
+  s3AlcoholMl: 0.0021,
+  s3NaohKg: 1.1200,
+  s3AlumKg: 0.2000,
+  s3SulfuricAcidKg: 0.2500,
+  s3LimeKg: 1.0000,
+  s3ChlorineKg: 1.0800,
 };
 
 // Reduction activity emission factors (kgCO2e avoided per unit)
@@ -99,7 +107,14 @@ function calcScope3(d: any, ef: any): number {
     (d.s3InfWasteIncinKg          ?? 0) * ef.s3InfWasteIncin +
     (d.s3InfWasteAutoclaveExtKg   ?? 0) * ef.s3InfWasteAutoclaveExt +
     (d.s3TravelCarKm              ?? 0) * ef.s3TravelCar +
-    (d.s3TravelPlaneKm            ?? 0) * ef.s3TravelPlane
+    (d.s3TravelPlaneKm            ?? 0) * ef.s3TravelPlane +
+    (d.s3TonerCartridges          ?? 0) * ef.s3TonerCartridges +
+    (d.s3AlcoholMl                ?? 0) * ef.s3AlcoholMl +
+    (d.s3NaohKg                   ?? 0) * ef.s3NaohKg +
+    (d.s3AlumKg                   ?? 0) * ef.s3AlumKg +
+    (d.s3SulfuricAcidKg           ?? 0) * ef.s3SulfuricAcidKg +
+    (d.s3LimeKg                   ?? 0) * ef.s3LimeKg +
+    (d.s3ChlorineKg               ?? 0) * ef.s3ChlorineKg
   );
 }
 
