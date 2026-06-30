@@ -1,383 +1,135 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
+// ฟังก์ชันสำหรับแยกคำสั่ง SQL อย่างชาญฉลาดโดยไม่แยกเครื่องหมาย Semicolon ที่อยู่ใน Single/Double Quotes หรือ Comments
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let currentStatement = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inComment = false;
+  let inMultilineComment = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    const nextChar = sql[i + 1];
+
+    // จัดการคอมเมนต์แบบบรรทัดเดียว (-- หรือ #)
+    if (inComment) {
+      if (char === '\n') {
+        inComment = false;
+      }
+      continue;
+    }
+
+    // จัดการคอมเมนต์แบบหลายบรรทัด (/* ... */)
+    if (inMultilineComment) {
+      if (char === '*' && nextChar === '/') {
+        inMultilineComment = false;
+        i++; // ข้าม '/'
+      }
+      continue;
+    }
+
+    // เริ่มต้นคอมเมนต์
+    if (char === '-' && nextChar === '-') {
+      inComment = true;
+      i++;
+      continue;
+    }
+    if (char === '#' && (i === 0 || sql[i - 1] === '\n')) {
+      inComment = true;
+      continue;
+    }
+    if (char === '/' && nextChar === '*') {
+      inMultilineComment = true;
+      i++;
+      continue;
+    }
+
+    // จัดการเครื่องหมาย Single Quotes (') โดยตรวจสอบ Escape string (\') ด้วย
+    if (char === "'" && !inDoubleQuote) {
+      if (i === 0 || sql[i - 1] !== '\\') {
+        inSingleQuote = !inSingleQuote;
+      }
+    }
+
+    // จัดการเครื่องหมาย Double Quotes (") โดยตรวจสอบ Escape string (\") ด้วย
+    if (char === '"' && !inSingleQuote) {
+      if (i === 0 || sql[i - 1] !== '\\') {
+        inDoubleQuote = !inDoubleQuote;
+      }
+    }
+
+    // แยกคำสั่งเฉพาะเมื่อเจอ Semicolon (;) ที่อยู่นอก Quotes และ Comments
+    if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+      const trimmed = currentStatement.trim();
+      if (trimmed) {
+        statements.push(trimmed);
+      }
+      currentStatement = '';
+    } else {
+      currentStatement += char;
+    }
+  }
+
+  const finalTrimmed = currentStatement.trim();
+  if (finalTrimmed) {
+    statements.push(finalTrimmed);
+  }
+
+  return statements;
+}
+
 async function main() {
-  console.log('🌱 Starting database seeding...');
+  console.log('🌱 Starting database seeding from SQL dump...');
 
-  // 1. Create Permissions
-  const permissionsData = [
-    { name: 'users:create', description: 'Create new users' },
-    { name: 'users:read', description: 'Read user details and list users' },
-    { name: 'users:update', description: 'Update existing users' },
-    { name: 'users:delete', description: 'Delete users (soft delete)' },
-    { name: 'users:restore', description: 'Restore soft-deleted users' },
-    
-    { name: 'roles:create', description: 'Create new roles' },
-    { name: 'roles:read', description: 'Read role details and list roles' },
-    { name: 'roles:update', description: 'Update existing roles' },
-    { name: 'roles:delete', description: 'Delete roles' },
-    { name: 'roles:restore', description: 'Restore soft-deleted roles' },
-
-    { name: 'permissions:read', description: 'Read permission details and list permissions' },
-    { name: 'dashboard:read', description: 'View dashboard statistics' },
-
-    { name: 'organizations:create', description: 'Create new organizations' },
-    { name: 'organizations:read', description: 'Read organization details' },
-    { name: 'organizations:update', description: 'Update organizations' },
-    { name: 'organizations:delete', description: 'Delete organizations' },
-    { name: 'organizations:restore', description: 'Restore organizations' },
-
-    { name: 'departments:create', description: 'Create new departments' },
-    { name: 'departments:read', description: 'Read department details' },
-    { name: 'departments:update', description: 'Update departments' },
-    { name: 'departments:delete', description: 'Delete departments' },
-    { name: 'departments:restore', description: 'Restore departments' },
-
-    { name: 'carbon-records:create', description: 'Create carbon emission records' },
-    { name: 'carbon-records:read', description: 'Read carbon emission records' },
-    { name: 'carbon-records:update', description: 'Update carbon emission records' },
-    { name: 'carbon-records:delete', description: 'Delete carbon emission records' },
-    { name: 'carbon-records:restore', description: 'Restore carbon emission records' }
-  ];
-
-  const permissions: any[] = [];
-  for (const perm of permissionsData) {
-    const createdPerm = await prisma.permission.upsert({
-      where: { name: perm.name },
-      update: {},
-      create: { name: perm.name, description: perm.description, createdBy: 'SYSTEM' }
-    });
-    permissions.push(createdPerm);
-  }
-  console.log(`✅ Created/verified ${permissions.length} permissions.`);
-
-  // 2. Create Roles
-  const roles = {
-    superAdmin: await prisma.role.upsert({
-      where: { name: 'SuperAdmin' },
-      update: {},
-      create: {
-        id: 'dd293fa7-a242-4590-bc8f-f13750240a0f',
-        name: 'SuperAdmin',
-        description: 'Super Administrator with full access',
-        createdBy: 'SYSTEM'
-      }
-    }),
-    admin: await prisma.role.upsert({
-      where: { name: 'Admin' },
-      update: {},
-      create: {
-        id: 'cca62d9a-8d89-43d1-bffc-e6055a33d6e5',
-        name: 'Admin',
-        description: 'Administrator with org-scoped access',
-        createdBy: 'SYSTEM'
-      }
-    }),
-    user: await prisma.role.upsert({
-      where: { name: 'User' },
-      update: {},
-      create: {
-        id: '3dc6b7c7-77ed-4e89-a955-86e8990c7964',
-        name: 'User',
-        description: 'Regular staff user with department-scoped access',
-        createdBy: 'SYSTEM'
-      }
-    })
-  };
-  console.log('✅ Created/verified SuperAdmin, Admin, and User roles.');
-
-  // 3. Assign Permissions to Roles
-  // SuperAdmin gets ALL permissions
-  for (const perm of permissions) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: roles.superAdmin.id, permissionId: perm.id } },
-      update: {},
-      create: { roleId: roles.superAdmin.id, permissionId: perm.id, createdBy: 'SYSTEM' }
-    });
+  const sqlPath = path.join(__dirname, 'carbon_db.sql');
+  if (!fs.existsSync(sqlPath)) {
+    throw new Error(`❌ SQL dump file not found at: ${sqlPath}`);
   }
 
-  // Admin: users CRUD + roles:read + permissions:read + dashboard:read + orgs:read + depts:read/create/update
-  const adminPermNames = [
-    'users:create', 'users:read', 'users:update', 'users:delete', 'users:restore',
-    'roles:read', 'permissions:read', 'dashboard:read',
-    'organizations:read',
-    'departments:read', 'departments:create', 'departments:update',
-    'carbon-records:create', 'carbon-records:read', 'carbon-records:update', 'carbon-records:delete', 'carbon-records:restore'
-  ];
-  const adminPermissions = permissions.filter(p => adminPermNames.includes(p.name));
-  for (const perm of adminPermissions) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: roles.admin.id, permissionId: perm.id } },
-      update: {},
-      create: { roleId: roles.admin.id, permissionId: perm.id, createdBy: 'SYSTEM' }
-    });
-  }
+  console.log(`📖 Reading SQL dump file from: ${sqlPath}`);
+  const sqlContent = fs.readFileSync(sqlPath, 'utf8');
 
-  // User: users:read + dashboard:read + depts:read + orgs:read + carbon-records:create/read/update
-  const userPermNames = ['users:read', 'dashboard:read', 'departments:read', 'organizations:read', 'carbon-records:create', 'carbon-records:read', 'carbon-records:update'];
-  const userPermissions = permissions.filter(p => userPermNames.includes(p.name));
-  for (const perm of userPermissions) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: roles.user.id, permissionId: perm.id } },
-      update: {},
-      create: { roleId: roles.user.id, permissionId: perm.id, createdBy: 'SYSTEM' }
-    });
-  }
-  console.log('✅ Assigned permissions to roles.');
+  console.log('Parsing SQL statements...');
+  const statements = splitSqlStatements(sqlContent);
 
-  // 4. Create Organization & Departments
-  const org = await prisma.organization.upsert({
-    where: { code: 'ORG001' },
-    update: {},
-    create: {
-      code: 'ORG001',
-      name: 'สำนักงานสาธารณสุขอุดรธานี',
-      description: 'สำนักงานสาธารณสุขจังหวัดอุดรธานี',
-      address: 'ถนนอุดร-หนองคาย ตำบลหมากแข้ง อำเภอเมืองอุดรธานี จังหวัดอุดรธานี 41000',
-      phone: '042-222-718',
-      createdBy: 'SYSTEM'
+  console.log(`🚀 Found ${statements.length} SQL statements to execute.`);
+
+  // รันคำสั่งทั้งหมดภายใต้ Connection Session เดียวกันเพื่อปิด/เปิด Foreign Key Checks ได้อย่างสมบูรณ์
+  console.log('⚙️ Disabling foreign key checks for seeding session...');
+  await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0;');
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const statement of statements) {
+    const upperStatement = statement.toUpperCase();
+
+    // ข้ามคำสั่งสร้างหรือใช้ Database เพื่อใช้ database จาก connection string ของ Prisma เป็นหลัก
+    if (upperStatement.startsWith('CREATE DATABASE') || upperStatement.startsWith('USE ')) {
+      console.log(`\n⏭️ Skipping database config statement: ${statement.substring(0, 70)}...`);
+      continue;
     }
-  });
 
-  // 4.1 Create System Organization (for global system defaults - SuperAdmin only)
-  const systemOrg = await prisma.organization.upsert({
-    where: { code: 'SYSTEM' },
-    update: {},
-    create: {
-      code: 'SYSTEM',
-      name: 'ค่ามาตรฐานระบบ (System Defaults)',
-      description: 'ค่าสัมประสิทธิ์การปล่อยก๊าซเรือนกระจกแบบมาตรฐานกลางของระบบ — แก้ไขได้เฉพาะ SuperAdmin',
-      isSystem: true,
-      createdBy: 'SYSTEM'
-    }
-  });
-  console.log(`✅ Created/verified System Organization: code=SYSTEM (ค่ามาตรฐานระบบ)`);
-
-
-  const departmentsData = [
-    { code: 'DIG', name: 'กลุ่มงานสุขภาพดิจิทัล' },
-    { code: 'CDC', name: 'กลุ่มงานควบคุมโรคติดต่อ' },
-    { code: 'INS', name: 'กลุ่มงานประกันสุขภาพ' },
-    { code: 'HPR', name: 'กลุ่มงานส่งเสริมสุขภาพ' },
-    { code: 'HRM', name: 'กลุ่มงานบริหารทรัพยากรบุคคล' },
-    { code: 'STR', name: 'กลุ่มงานพัฒนายุทธศาสตร์สาธารณสุข' },
-    { code: 'CPH', name: 'กลุ่มงานคุ้มครองผู้บริโภคและเภสัชสาธารณสุข' },
-    { code: 'ENV', name: 'กลุ่มงานอนามัยสิ่งแวดล้อมและอาชีวอนามัย' },
-    { code: 'LAW', name: 'กลุ่มงานกฎหมาย' },
-    { code: 'ADM', name: 'กลุ่มงานบริหารทั่วไป' },
-    { code: 'DEN', name: 'กลุ่มงานทันตสาธารณสุข' },
-    { code: 'PHC', name: 'กลุ่มงานปฐมภูมิและเครือข่ายสุขภาพ' },
-    { code: 'QSI', name: 'กลุ่มงานพัฒนาคุณภาพและรูปแบบบริการ' },
-    { code: 'TTM', name: 'กลุ่มงานแพทย์แผนไทยและการแพทย์ทางเลือก' },
-    { code: 'COM', name: 'กลุ่มงานสื่อสารความเสี่ยงและประชาสัมพันธ์' },
-    { code: 'NCD', name: 'กลุ่มงานควบคุมโรคไม่ติดต่อสุขภาพจิตและยาเสพติด' },
-  ];
-
-  const deptMap: Record<string, any> = {};
-  for (const dept of departmentsData) {
-    const customId = dept.code === 'DIG' ? '2ab71a9a-f0d9-4b06-86ae-c5677610b070' : undefined;
-    const created = await prisma.department.upsert({
-      where: { code_organizationId: { code: dept.code, organizationId: org.id } },
-      update: {},
-      create: {
-        id: customId,
-        code: dept.code,
-        name: dept.name,
-        organizationId: org.id,
-        createdBy: 'SYSTEM'
-      }
-    });
-    deptMap[dept.code] = created;
-  }
-  console.log(`✅ Created/verified organization "${org.name}" with ${departmentsData.length} departments.`);
-
-  // 5. Create Default Users
-  const customPasswordHash = '$2a$10$3FrtBPzOdGfaJFcHHM2qnOEXtkyA1KZ4R0DMXiukJ2mc/iQzPfY/u';
-
-  // ล้างบัญชีผู้ใช้เก่าที่มีอีเมลซ้ำแต่ ID ไม่ตรงกับข้อมูลใหม่ เพื่อป้องกัน Unique constraint error
-  await prisma.user.deleteMany({
-    where: {
-      email: { in: ['superadmin@example.com', 'admin@example.com', 'user@example.com'] },
-      id: { notIn: [
-        'ce2e3057-ab81-41f5-8fec-f84f996eea64',
-        '337199b5-4078-45b1-a1a1-f6ef1b59c2db',
-        '01212249-01dd-4ad8-9f61-4525b04a4d41'
-      ]}
-    }
-  });
-
-  // SuperAdmin — ce2e3057-ab81-41f5-8fec-f84f996eea64
-  const superUser = await prisma.user.upsert({
-    where: { id: 'ce2e3057-ab81-41f5-8fec-f84f996eea64' },
-    update: {
-      email: 'superadmin@example.com',
-      password: customPasswordHash,
-      name: 'System SuperAdmin',
-      roleId: roles.superAdmin.id,
-      departmentId: null
-    },
-    create: {
-      id: 'ce2e3057-ab81-41f5-8fec-f84f996eea64',
-      email: 'superadmin@example.com',
-      password: customPasswordHash,
-      name: 'System SuperAdmin',
-      roleId: roles.superAdmin.id,
-      departmentId: null,
-      createdBy: 'SYSTEM'
-    }
-  });
-
-  // Admin — 337199b5-4078-45b1-a1a1-f6ef1b59c2db
-  const normalAdmin = await prisma.user.upsert({
-    where: { id: '337199b5-4078-45b1-a1a1-f6ef1b59c2db' },
-    update: {
-      email: 'admin@example.com',
-      password: customPasswordHash,
-      name: 'Org Admin',
-      roleId: roles.admin.id,
-      departmentId: deptMap['DIG'].id
-    },
-    create: {
-      id: '337199b5-4078-45b1-a1a1-f6ef1b59c2db',
-      email: 'admin@example.com',
-      password: customPasswordHash,
-      name: 'Org Admin',
-      roleId: roles.admin.id,
-      departmentId: deptMap['DIG'].id,
-      createdBy: 'SYSTEM'
-    }
-  });
-
-  // User — 01212249-01dd-4ad8-9f61-4525b04a4d41
-  const standardUser = await prisma.user.upsert({
-    where: { id: '01212249-01dd-4ad8-9f61-4525b04a4d41' },
-    update: {
-      email: 'user@example.com',
-      password: customPasswordHash,
-      name: 'User Staff',
-      roleId: roles.user.id,
-      departmentId: deptMap['DIG'].id
-    },
-    create: {
-      id: '01212249-01dd-4ad8-9f61-4525b04a4d41',
-      email: 'user@example.com',
-      password: customPasswordHash,
-      name: 'User Staff',
-      roleId: roles.user.id,
-      departmentId: deptMap['DIG'].id,
-      createdBy: 'SYSTEM'
-    }
-  });
-
-  // 6. Create Default Emission Factors (for 2025 and 2026)
-  const defaultFactors = [
-    // Scope 1
-    { category: 'scope1', key: 's1StationaryDiesel', name: 'น้ำมันดีเซลสำหรับเครื่องจักร', value: 2.7078, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope1', key: 's1StationaryGasoline', name: 'น้ำมันเบนซินสำหรับเครื่องจักร', value: 2.1894, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope1', key: 's1CookingLpg', name: 'แก๊สหุงต้ม LPG', value: 3.1134, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1VehicleDiesel', name: 'น้ำมันดีเซลสำหรับยานพาหนะ', value: 2.7406, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope1', key: 's1VehicleGasoline', name: 'น้ำมันเบนซินสำหรับยานพาหนะ', value: 2.2394, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope1', key: 's1VehicleCng', name: 'ก๊าซธรรมชาติ CNG สำหรับยานพาหนะ', value: 2.2609, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1FireExtCo2', name: 'ถังดับเพลิง CO2', value: 1.0000, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1RefrigHfc134a', name: 'สารทำความเย็น HFC-134a', value: 1300.0000, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1RefrigR22', name: 'สารทำความเย็น R22', value: 1760.0000, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1AnesthesiaN2o', name: 'ยาสลบไนตรัสออกไซด์ (N2O)', value: 0.3249, unit: 'kgCO2e/มล.' },
-    { category: 'scope1', key: 's1AnesthesiaIsoflur', name: 'ยาสลบ Isoflurane', value: 0.8160, unit: 'kgCO2e/มล.' },
-    { category: 'scope1', key: 's1AnesthesiaDesflu', name: 'ยาสลบ Desflurane', value: 3.6805, unit: 'kgCO2e/มล.' },
-    { category: 'scope1', key: 's1AnesthesiaSevoflur', name: 'ยาสลบ Sevoflurane', value: 0.2196, unit: 'kgCO2e/มล.' },
-    { category: 'scope1', key: 's1InfWasteAutoclave', name: 'ขยะติดเชื้อ อบฆ่าเชื้อภายใน', value: 0.2430, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1OrganicWasteFerment', name: 'ขยะอินทรีย์หมักภายใน', value: 0.3338, unit: 'kgCO2e/กก.' },
-    { category: 'scope1', key: 's1OrganicWasteCompost', name: 'ขยะอินทรีย์ปุ๋ยหมักภายใน', value: 0.1102, unit: 'kgCO2e/กก.' },
-    // Scope 2
-    { category: 'scope2', key: 's2Electricity', name: 'การใช้ไฟฟ้ากระแสไฟฟ้า', value: 0.5781, unit: 'kgCO2e/kWh' },
-    // Scope 3
-    { category: 'scope3', key: 's3Water', name: 'การใช้น้ำประปา', value: 0.5411, unit: 'kgCO2e/ลบ.ม.' },
-    { category: 'scope3', key: 's3PaperA4', name: 'การเบิกกระดาษ A4', value: 5.2540, unit: 'kgCO2e/รีม' },
-    { category: 'scope3', key: 's3PlasticBag', name: 'การใช้ถุงขยะพลาสติก', value: 6.7070, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3OutsourceDiesel', name: 'น้ำมันดีเซลจ้างเหมาขนส่ง', value: 2.7406, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope3', key: 's3OutsourceGasoline', name: 'น้ำมันเบนซินจ้างเหมาขนส่ง', value: 2.2394, unit: 'kgCO2e/ลิตร' },
-    { category: 'scope3', key: 's3GeneralWasteLandfill', name: 'ขยะทั่วไปฝังกลบภายนอก', value: 0.5000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3HazardousWasteLandfill', name: 'ขยะอันตรายฝังกลบภายนอก', value: 0.5000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3HazardousWasteIncin', name: 'ขยะอันตรายเผาภายนอก', value: 0.5000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3InfWasteIncin', name: 'ขยะติดเชื้อเผาภายนอก', value: 0.5000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3InfWasteAutoclaveExt', name: 'ขยะติดเชื้อ อบฆ่าเชื้อภายนอก', value: 0.2430, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3TravelCar', name: 'การเดินทางด้วยรถยนต์ส่วนตัว/องค์กร', value: 0.1680, unit: 'kgCO2e/กม.' },
-    { category: 'scope3', key: 's3TravelPlane', name: 'การเดินทางด้วยเครื่องบินชั้นประหยัด', value: 0.1539, unit: 'kgCO2e/กม.' },
-    { category: 'scope3', key: 's3TonerCartridges', name: 'ตลับหมึกพิมพ์เลเซอร์', value: 4.8000, unit: 'kgCO2e/ตลับ' },
-    { category: 'scope3', key: 's3AlcoholMl', name: 'ปริมาณการใช้ Alcohol', value: 0.0021, unit: 'kgCO2e/มล.' },
-    { category: 'scope3', key: 's3NaohKg', name: 'โซดาไฟ NaOH', value: 1.1200, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3AlumKg', name: 'สารส้ม', value: 0.2000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3SulfuricAcidKg', name: 'กรดซัลฟิวริก', value: 0.2500, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3LimeKg', name: 'ปูนขาว', value: 1.0000, unit: 'kgCO2e/กก.' },
-    { category: 'scope3', key: 's3ChlorineKg', name: 'คลอรีน', value: 1.0800, unit: 'kgCO2e/กก.' },
-    // Reduction
-    { category: 'reduction', key: 'compostFoodWaste', name: 'ปุ๋ยหมักเศษอาหาร', value: 0.4300, unit: 'kgCO2e/กก.' },
-    { category: 'reduction', key: 'compostLeafBranch', name: 'ปุ๋ยหมักกิ่งไม้ใบไม้', value: 0.1102, unit: 'kgCO2e/กก.' },
-    { category: 'reduction', key: 'solarElectricity', name: 'การผลิตไฟฟ้า Solar Cell', value: 0.5781, unit: 'kgCO2e/kWh' },
-    { category: 'reduction', key: 'treePerYear', name: 'การดูดกลับคาร์บอนของไม้ยืนต้น', value: 3.6700, unit: 'kgCO2e/ต้น/ปี' }
-  ];
-
-  // Seed for ORG001 (for 2025 and 2026 only)
-  for (const year of [2025, 2026]) {
-    for (const factor of defaultFactors) {
-      await prisma.emissionFactor.upsert({
-        where: {
-          year_key_organizationId: {
-            year,
-            key: factor.key,
-            organizationId: org.id
-          }
-        },
-        update: {},
-        create: {
-          year,
-          category: factor.category,
-          key: factor.key,
-          name: factor.name,
-          value: factor.value,
-          unit: factor.unit,
-          organizationId: org.id,
-          createdBy: 'SYSTEM'
-        }
-      });
+    try {
+      await prisma.$executeRawUnsafe(statement);
+      successCount++;
+    } catch (error: any) {
+      console.warn(`\n⚠️ Warning executing statement: ${statement.substring(0, 100)}...`);
+      console.warn(`Reason: ${error.message || error}`);
+      failCount++;
     }
   }
-  console.log('✅ Created/verified default Emission Factors for ORG001 (2025-2026).');
 
-  // 6.2 Seed SYSTEM org defaults for 3 years: 2024 (2567), 2025 (2568), 2026 (2569)
-  for (const year of [2024, 2025, 2026]) {
-    for (const factor of defaultFactors) {
-      await prisma.emissionFactor.upsert({
-        where: {
-          year_key_organizationId: {
-            year,
-            key: factor.key,
-            organizationId: systemOrg.id
-          }
-        },
-        update: {},
-        create: {
-          year,
-          category: factor.category,
-          key: factor.key,
-          name: factor.name,
-          value: factor.value,
-          unit: factor.unit,
-          organizationId: systemOrg.id,
-          createdBy: 'SYSTEM'
-        }
-      });
-    }
-  }
-  console.log('✅ Created/verified System Defaults (SYSTEM org) for 2024 (2567), 2025 (2568), 2026 (2569).');
+  console.log('\n⚙️ Re-enabling foreign key checks...');
+  await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1;');
 
-
-  console.log(`✅ Default SuperAdmin: ${superUser.email} (ไม่มีสังกัด — เข้าถึงทุกองค์กร)`);
-  console.log(`✅ Default Admin: ${normalAdmin.email} → สังกัด ${deptMap['DIG'].name}`);
-  console.log(`✅ Default User: ${standardUser.email} → สังกัด ${deptMap['ADM'].name}`);
-  console.log('🌱 Database seeding completed successfully.');
+  console.log(`\n🌱 Seeding completed. Success: ${successCount}, Failed/Skipped: ${failCount}`);
 }
 
 main()
